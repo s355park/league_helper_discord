@@ -213,10 +213,10 @@ class RiotAPIClient:
     
     async def get_highest_tier(self, game_name: str, tag_line: str, region: str = "na1") -> tuple[Optional[str], Optional[str]]:
         """
-        Get the highest tier and rank for a player (current highest across all queues).
+        Get the highest tier and rank for a player from ranked solo queue only.
         
         Note: Riot API doesn't directly provide historical "highest ever" rank.
-        This method returns the highest current rank across all ranked queues.
+        This method returns the current rank from RANKED_SOLO_5x5 queue.
         For true historical data, match history analysis would be required.
         
         Args:
@@ -250,45 +250,36 @@ class RiotAPIClient:
             
             logger.info(f"[RiotAPI] Found ranked data in region {region}: {len(ranked_data)} entries")
             
-            # Find highest tier across all queues
-            highest_tier = None
-            highest_rank = None
-            highest_value = 0
-            
+            # Filter for ranked solo queue only (RANKED_SOLO_5x5)
+            solo_queue_entry = None
             for entry in ranked_data:
-                tier = entry.get("tier", "")
-                rank = entry.get("rank", "")
                 queue_type = entry.get("queueType", "")
-                
-                print(f"[RiotAPI] Processing entry: queue={queue_type}, tier={tier}, rank={rank}")
-                
-                if tier:
-                    tier_upper = tier.upper()
-                    if tier_upper in self.TIER_VALUES:
-                        tier_value = self.TIER_VALUES[tier_upper]
-                        rank_value = self.RANK_VALUES.get(rank, 2)
-                        # Combined value: tier * 10 + (5 - rank_value) for better sorting
-                        combined_value = tier_value * 10 + (5 - rank_value)
-                        
-                        print(f"[RiotAPI] Tier value: {tier_upper}={tier_value}, Rank={rank}={rank_value}, Combined={combined_value}")
-                        
-                        if combined_value > highest_value:
-                            highest_value = combined_value
-                            highest_tier = tier_upper
-                            highest_rank = rank
-                            print(f"[RiotAPI] New highest: {highest_tier} {highest_rank} in {queue_type}")
-                    else:
-                        print(f"[RiotAPI] WARNING - Tier '{tier}' not in TIER_VALUES: {list(self.TIER_VALUES.keys())}")
-                else:
-                    print(f"[RiotAPI] WARNING - Entry has no tier field: {entry}")
+                if queue_type == "RANKED_SOLO_5x5":
+                    solo_queue_entry = entry
+                    logger.info(f"[RiotAPI] Found ranked solo queue entry: {entry}")
+                    break
             
-            if highest_tier:
-                logger.info(f"[RiotAPI] SUCCESS - Final highest tier: {highest_tier} {highest_rank}")
-            else:
-                logger.warning(f"[RiotAPI] ERROR - No valid tier found in ranked data for {game_name}#{tag_line}")
+            if not solo_queue_entry:
+                logger.warning(f"[RiotAPI] No ranked solo queue data found for {game_name}#{tag_line}")
+                return None, None
             
-            logger.info(f"[RiotAPI] RETURNING: tier={highest_tier}, rank={highest_rank}")
-            return highest_tier, highest_rank
+            # Extract tier and rank from solo queue entry
+            tier = solo_queue_entry.get("tier", "")
+            rank = solo_queue_entry.get("rank", "")
+            
+            logger.info(f"[RiotAPI] Ranked solo queue tier: {tier}, rank: {rank}")
+            
+            if not tier:
+                logger.warning(f"[RiotAPI] No tier found in ranked solo queue entry")
+                return None, None
+            
+            tier_upper = tier.upper()
+            if tier_upper not in self.TIER_VALUES:
+                logger.warning(f"[RiotAPI] Invalid tier '{tier}' not in TIER_VALUES: {list(self.TIER_VALUES.keys())}")
+                return None, None
+            
+            logger.info(f"[RiotAPI] SUCCESS - Ranked solo queue tier: {tier_upper} {rank}")
+            return tier_upper, rank
             
         except RiotAPIError as e:
             logger.error(f"[RiotAPI] RiotAPIError in get_highest_tier: {str(e)}")
@@ -306,9 +297,11 @@ class RiotAPIClient:
         Each tier = 100 points, each division = 25 points
         This matches League's ~100 LP per division structure.
         
+        Master, Grandmaster, and Challenger have fixed values (no ranks).
+        
         Args:
-            tier: Tier name (e.g., "DIAMOND", "GOLD")
-            rank: Rank within tier (e.g., "I", "II", "III", "IV")
+            tier: Tier name (e.g., "DIAMOND", "GOLD", "MASTER")
+            rank: Rank within tier (e.g., "I", "II", "III", "IV") - ignored for Master+
             
         Returns:
             Numeric value representing skill level
@@ -316,7 +309,18 @@ class RiotAPIClient:
         if not tier:
             return 0
         
-        tier_val = self.TIER_VALUES.get(tier.upper(), 0)
+        tier_upper = tier.upper()
+        
+        # Master, Grandmaster, and Challenger have fixed values (no ranks)
+        if tier_upper == "MASTER":
+            return 800
+        elif tier_upper == "GRANDMASTER":
+            return 900
+        elif tier_upper == "CHALLENGER":
+            return 1000
+        
+        # For other tiers, calculate based on tier and rank
+        tier_val = self.TIER_VALUES.get(tier_upper, 0)
         base_mmr = tier_val * 100  # Each tier = 100 points
         
         if rank:

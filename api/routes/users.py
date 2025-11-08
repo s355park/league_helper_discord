@@ -62,7 +62,24 @@ async def connect_league_account(account: LeagueAccountConnect):
         )
         
         # Get custom_mmr from user record
-        custom_mmr = user.get("custom_mmr", 1000)
+        custom_mmr = user.get("custom_mmr")
+        
+        # If MMR doesn't exist (None) or is default (1000), calculate from tier
+        if custom_mmr is None or custom_mmr == 1000:
+            if highest_tier:
+                # Calculate MMR based on tier and rank
+                tier_based_mmr = riot_client.tier_to_value(highest_tier, highest_rank)
+                logger.info(f"[API] Setting initial MMR from tier: {highest_tier} {highest_rank} = {tier_based_mmr}")
+                
+                # Update user's MMR in database
+                await db_service.update_player_mmr(account.discord_id, tier_based_mmr)
+                custom_mmr = tier_based_mmr
+            else:
+                # No tier available, use default
+                custom_mmr = 1000
+                logger.info(f"[API] No tier available, using default MMR: {custom_mmr}")
+        else:
+            logger.info(f"[API] User already has custom MMR: {custom_mmr}, keeping existing value")
         
         return LeagueAccountResponse(
             discord_id=account.discord_id,
