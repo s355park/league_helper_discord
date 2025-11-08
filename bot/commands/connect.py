@@ -83,6 +83,10 @@ class ConnectCommand(commands.Cog):
             await interaction.followup.send(embed=embed, ephemeral=True)
         except Exception as e:
             error_msg = str(e)
+            print(f"[Bot] ERROR in /connect: {error_msg}", flush=True)
+            import traceback
+            traceback.print_exc()
+            
             if "404" in error_msg or "not found" in error_msg.lower():
                 error_msg = "Account not found. Please check your Riot ID and try again."
             elif "403" in error_msg or "api key" in error_msg.lower():
@@ -97,7 +101,15 @@ class ConnectCommand(commands.Cog):
                 description=error_msg,
                 color=discord.Color.red()
             )
-            await interaction.followup.send(embed=embed, ephemeral=True)
+            try:
+                await interaction.followup.send(embed=embed, ephemeral=True)
+            except Exception as followup_error:
+                print(f"[Bot] ERROR sending followup: {followup_error}", flush=True)
+                # Try to edit the original response if followup fails
+                try:
+                    await interaction.edit_original_response(content=f"❌ Error: {error_msg}")
+                except:
+                    pass
     
     @app_commands.command(name="me", description="View your connected League of Legends account")
     async def me(self, interaction: discord.Interaction):

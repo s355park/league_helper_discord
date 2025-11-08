@@ -73,7 +73,30 @@ class LeagueTeamBot(commands.Bot):
         """Handle command errors."""
         if isinstance(error, commands.CommandNotFound):
             return
-        print(f"Error: {error}")
+        print(f"Error: {error}", flush=True)
+        import traceback
+        traceback.print_exc()
+    
+    async def on_interaction(self, interaction: discord.Interaction):
+        """Log all interactions for debugging."""
+        if interaction.type == discord.InteractionType.application_command:
+            print(f"[Bot] Received command: {interaction.command.name} from {interaction.user} ({interaction.user.id})", flush=True)
+        return await super().on_interaction(interaction)
+    
+    async def on_app_command_error(self, interaction: discord.Interaction, error: discord.app_commands.AppCommandError):
+        """Handle application command errors."""
+        print(f"[Bot] Command error in {interaction.command.name}: {error}", flush=True)
+        import traceback
+        traceback.print_exc()
+        
+        # Try to send error message to user
+        try:
+            if interaction.response.is_done():
+                await interaction.followup.send(f"❌ Error: {str(error)}", ephemeral=True)
+            else:
+                await interaction.response.send_message(f"❌ Error: {str(error)}", ephemeral=True)
+        except:
+            pass
 
 
 async def main():

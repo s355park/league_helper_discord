@@ -24,17 +24,17 @@ class APIClient:
             "tag_line": tag_line
         }
         
-        print(f"[Bot] Making request to {url}")
-        print(f"[Bot] Data: {data}")
+        print(f"[Bot] Making request to {url}", flush=True)
+        print(f"[Bot] Data: {data}", flush=True)
         
         try:
             async with httpx.AsyncClient() as client:
-                print(f"[Bot] Sending POST request...")
+                print(f"[Bot] Sending POST request...", flush=True)
                 response = await client.post(url, json=data, timeout=30.0)
-                print(f"[Bot] Got response: {response.status_code}")
+                print(f"[Bot] Got response: {response.status_code}", flush=True)
                 response.raise_for_status()
                 result = response.json()
-                print(f"[Bot] Response data: {result}")
+                print(f"[Bot] Response data: {result}", flush=True)
                 return result
         except httpx.ConnectError as e:
             raise ConnectionError(f"Failed to connect to API at {url}. Error: {str(e)}\n\nIs the FastAPI server running? Try: python -m uvicorn api.main:app --reload")
