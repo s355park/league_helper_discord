@@ -47,6 +47,7 @@ class ConnectCommand(commands.Cog):
             print(f"[Bot] Calling API client...", flush=True)
             account = await self.api_client.connect_account(
                 str(interaction.user.id),
+                interaction.user.display_name,  # Discord display name
                 game_name,
                 tag_line,
                 str(interaction.guild_id)

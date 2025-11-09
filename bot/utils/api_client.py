@@ -13,6 +13,7 @@ class APIClient:
     async def connect_account(
         self,
         discord_id: str,
+        discord_username: str,
         game_name: str,
         tag_line: str,
         guild_id: str
@@ -21,6 +22,7 @@ class APIClient:
         url = f"{self.base_url}/users/connect"
         data = {
             "discord_id": discord_id,
+            "discord_username": discord_username,
             "game_name": game_name,
             "tag_line": tag_line,
             "guild_id": guild_id

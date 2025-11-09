@@ -48,7 +48,7 @@ async def connect_league_account(account: LeagueAccountConnect):
         # Get or create user
         user = await db_service.get_or_create_user(
             account.discord_id,
-            account.game_name  # Using game_name as username for now
+            account.discord_username  # Store Discord username, not Riot username
         )
         
         # Upsert league account

@@ -6,6 +6,7 @@ from typing import Optional, List
 class LeagueAccountConnect(BaseModel):
     """Request schema for connecting a League account."""
     discord_id: str
+    discord_username: str  # Discord username (display name)
     game_name: str
     tag_line: str
     guild_id: str  # Discord server (guild) ID
