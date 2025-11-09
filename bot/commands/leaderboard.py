@@ -19,6 +19,10 @@ class LeaderboardCommand(commands.Cog):
         """Display MMR leaderboard."""
         await interaction.response.defer(thinking=True)
         
+        if not interaction.guild_id:
+            await interaction.followup.send("This command can only be used in a server!", ephemeral=True)
+            return
+        
         # Clamp limit
         limit = max(1, min(limit, 50))
         
@@ -27,7 +31,7 @@ class LeaderboardCommand(commands.Cog):
             url = f"{self.api_client.base_url}/users/leaderboard"
             
             async with httpx.AsyncClient() as client:
-                response = await client.get(url, params={"limit": limit}, timeout=10.0)
+                response = await client.get(url, params={"guild_id": str(interaction.guild_id), "limit": limit}, timeout=10.0)
                 response.raise_for_status()
                 data = response.json()
             
@@ -101,7 +105,7 @@ class LeaderboardCommand(commands.Cog):
             else:
                 # Get user's MMR to show their rank
                 try:
-                    account = await self.api_client.get_user_account(str(interaction.user.id))
+                    account = await self.api_client.get_user_account(str(interaction.user.id), str(interaction.guild_id))
                     user_mmr = account.get("custom_mmr", 1000)
                     
                     # Count how many players have higher MMR

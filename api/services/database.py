@@ -26,20 +26,28 @@ class DatabaseService:
         
         return result.data[0] if result.data else {}
     
-    async def get_league_account(self, discord_id: str) -> Optional[Dict[str, Any]]:
-        """Get League account for a Discord user with custom MMR."""
+    async def get_league_account(self, discord_id: str, guild_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """Get League account for a Discord user with custom MMR for a specific guild."""
         result = self.client.table("league_accounts").select(
-            "*, users!inner(custom_mmr)"
+            "*"
         ).eq("discord_id", discord_id).execute()
         
         if not result.data:
             return None
         
-        # Flatten the nested users data
         account = result.data[0]
-        if "users" in account and account["users"]:
-            account["custom_mmr"] = account["users"]["custom_mmr"]
-            del account["users"]
+        
+        # Get MMR from guild_users if guild_id is provided
+        if guild_id:
+            guild_user = self.client.table("guild_users").select("custom_mmr").eq("guild_id", guild_id).eq("discord_id", discord_id).execute()
+            if guild_user.data:
+                account["custom_mmr"] = guild_user.data[0]["custom_mmr"]
+            else:
+                # Default MMR if user not in guild_users yet
+                account["custom_mmr"] = 1000
+        else:
+            # Fallback to default if no guild_id
+            account["custom_mmr"] = 1000
         
         return account
     
@@ -81,27 +89,61 @@ class DatabaseService:
         
         return result.data[0] if result.data else {}
     
-    async def get_players_by_discord_ids(self, discord_ids: list[str]) -> list[Dict[str, Any]]:
-        """Get League account data for multiple Discord users with custom MMR."""
+    async def get_players_by_discord_ids(self, discord_ids: list[str], guild_id: Optional[str] = None) -> list[Dict[str, Any]]:
+        """Get League account data for multiple Discord users with custom MMR for a specific guild."""
         result = self.client.table("league_accounts").select(
-            "*, users!inner(custom_mmr)"
+            "*"
         ).in_("discord_id", discord_ids).execute()
         
-        # Flatten the nested users data
         players = []
-        for account in (result.data if result.data else []):
-            if "users" in account and account["users"]:
-                account["custom_mmr"] = account["users"]["custom_mmr"]
-                del account["users"]
+        if not result.data:
+            return players
+        
+        # Get MMRs from guild_users if guild_id is provided
+        if guild_id:
+            guild_users_result = self.client.table("guild_users").select("discord_id, custom_mmr").eq("guild_id", guild_id).in_("discord_id", discord_ids).execute()
+            mmr_map = {gu["discord_id"]: gu["custom_mmr"] for gu in (guild_users_result.data if guild_users_result.data else [])}
+        else:
+            mmr_map = {}
+        
+        for account in result.data:
+            discord_id = account["discord_id"]
+            if guild_id and discord_id in mmr_map:
+                account["custom_mmr"] = mmr_map[discord_id]
+            else:
+                # Default MMR if user not in guild_users yet
+                account["custom_mmr"] = 1000
             players.append(account)
         
         return players
     
-    async def update_player_mmr(self, discord_id: str, new_mmr: int) -> None:
-        """Update a player's custom MMR."""
-        self.client.table("users").update({
-            "custom_mmr": new_mmr
-        }).eq("discord_id", discord_id).execute()
+    async def get_or_create_guild_user(self, guild_id: str, discord_id: str, default_mmr: int = 1000) -> Dict[str, Any]:
+        """Get or create a guild_user entry."""
+        # Check if exists
+        result = self.client.table("guild_users").select("*").eq("guild_id", guild_id).eq("discord_id", discord_id).execute()
+        
+        if result.data:
+            return result.data[0]
+        
+        # Create new entry
+        result = self.client.table("guild_users").insert({
+            "guild_id": guild_id,
+            "discord_id": discord_id,
+            "custom_mmr": default_mmr
+        }).execute()
+        
+        return result.data[0] if result.data else {}
+    
+    async def update_player_mmr(self, discord_id: str, new_mmr: int, guild_id: str) -> None:
+        """Update a player's custom MMR for a specific guild."""
+        # Ensure guild_user exists first
+        await self.get_or_create_guild_user(guild_id, discord_id, new_mmr)
+        
+        # Update MMR
+        self.client.table("guild_users").update({
+            "custom_mmr": new_mmr,
+            "updated_at": "now()"
+        }).eq("guild_id", guild_id).eq("discord_id", discord_id).execute()
     
     async def record_match(
         self,
@@ -112,6 +154,7 @@ class DatabaseService:
         team1_avg_mmr: int,
         team2_avg_mmr: int,
         mmr_change: int,
+        guild_id: str,
         player_mmrs: dict[str, int] = None
     ) -> None:
         """Record a match result in the database."""
@@ -122,7 +165,8 @@ class DatabaseService:
             "winning_team": winning_team,
             "team1_avg_mmr": team1_avg_mmr,
             "team2_avg_mmr": team2_avg_mmr,
-            "mmr_change": mmr_change
+            "mmr_change": mmr_change,
+            "guild_id": guild_id
         }
         
         if player_mmrs:
@@ -130,13 +174,13 @@ class DatabaseService:
         
         self.client.table("matches").insert(data).execute()
     
-    async def get_player_match_history(self, discord_id: str, limit: int = 50) -> list[Dict[str, Any]]:
-        """Get match history for a player with their MMR at match time."""
-        # Get matches where player participated
+    async def get_player_match_history(self, discord_id: str, guild_id: str, limit: int = 50) -> list[Dict[str, Any]]:
+        """Get match history for a player with their MMR at match time in a specific guild."""
+        # Get matches where player participated in this guild
         # Use contains operator to check if discord_id is in the arrays
         result = self.client.table("matches").select(
             "id, match_id, created_at, winning_team, team1_player_ids, team2_player_ids, player_mmrs, mmr_change"
-        ).or_(
+        ).eq("guild_id", guild_id).or_(
             f"team1_player_ids.cs.{{{discord_id}}},team2_player_ids.cs.{{{discord_id}}}"
         ).order("created_at", desc=True).limit(limit).execute()
         
@@ -163,18 +207,21 @@ class DatabaseService:
         
         return matches
     
-    async def get_mmr_leaderboard(self, limit: int = 20) -> list[Dict[str, Any]]:
-        """Get MMR leaderboard sorted by custom_mmr."""
-        # Get users with league accounts, ordered by MMR
-        # Use inner join to only get users with connected league accounts
-        result = self.client.table("users").select(
-            "discord_id, username, custom_mmr, league_accounts(game_name, tag_line, highest_tier, highest_rank)"
-        ).order("custom_mmr", desc=True).limit(limit).execute()
+    async def get_mmr_leaderboard(self, guild_id: str, limit: int = 20) -> list[Dict[str, Any]]:
+        """Get MMR leaderboard sorted by custom_mmr for a specific guild."""
+        # Get guild_users with league accounts, ordered by MMR
+        result = self.client.table("guild_users").select(
+            "discord_id, custom_mmr, users(username, league_accounts(game_name, tag_line, highest_tier, highest_rank))"
+        ).eq("guild_id", guild_id).order("custom_mmr", desc=True).limit(limit).execute()
         
         leaderboard = []
-        for user in (result.data if result.data else []):
+        for guild_user in (result.data if result.data else []):
+            user_data = guild_user.get("users", {})
+            if not user_data:
+                continue
+            
             # Skip users without league accounts
-            league_accounts = user.get("league_accounts", [])
+            league_accounts = user_data.get("league_accounts", [])
             if not league_accounts:
                 continue
             
@@ -182,9 +229,9 @@ class DatabaseService:
             league_account = league_accounts[0] if isinstance(league_accounts, list) else league_accounts
             
             leaderboard.append({
-                "discord_id": user["discord_id"],
-                "username": user.get("username", "Unknown"),
-                "custom_mmr": user.get("custom_mmr", 1000),
+                "discord_id": guild_user["discord_id"],
+                "username": user_data.get("username", "Unknown"),
+                "custom_mmr": guild_user.get("custom_mmr", 1000),
                 "game_name": league_account.get("game_name") if isinstance(league_account, dict) else None,
                 "tag_line": league_account.get("tag_line") if isinstance(league_account, dict) else None,
                 "highest_tier": league_account.get("highest_tier") if isinstance(league_account, dict) else None,

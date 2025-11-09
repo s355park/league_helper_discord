@@ -10,11 +10,12 @@ from typing import List
 class MatchResultView(View):
     """View with buttons for recording match results."""
     
-    def __init__(self, match_id: str, team1_ids: List[str], team2_ids: List[str], api_client: APIClient):
+    def __init__(self, match_id: str, team1_ids: List[str], team2_ids: List[str], guild_id: str, api_client: APIClient):
         super().__init__(timeout=3600)  # 1 hour timeout
         self.match_id = match_id
         self.team1_ids = team1_ids
         self.team2_ids = team2_ids
+        self.guild_id = guild_id
         self.api_client = api_client
         self.result_recorded = False
     
@@ -32,7 +33,8 @@ class MatchResultView(View):
                 self.match_id,
                 1,
                 self.team1_ids,
-                self.team2_ids
+                self.team2_ids,
+                self.guild_id
             )
             
             self.result_recorded = True
@@ -86,7 +88,8 @@ class MatchResultView(View):
                 self.match_id,
                 2,
                 self.team1_ids,
-                self.team2_ids
+                self.team2_ids,
+                self.guild_id
             )
             
             self.result_recorded = True
@@ -178,6 +181,10 @@ class TeamsCommand(commands.Cog):
         """Generate balanced teams from 10 Discord users."""
         await interaction.response.defer(thinking=True)
         
+        if not interaction.guild_id:
+            await interaction.followup.send("This command can only be used in a server!", ephemeral=True)
+            return
+        
         # Collect Discord IDs
         players = [
             player1, player2, player3, player4, player5,
@@ -198,7 +205,7 @@ class TeamsCommand(commands.Cog):
         
         try:
             # Call API to generate teams
-            result = await self.api_client.generate_teams(discord_ids)
+            result = await self.api_client.generate_teams(discord_ids, str(interaction.guild_id))
             
             team1 = result["team1"]
             team2 = result["team2"]
@@ -235,7 +242,7 @@ class TeamsCommand(commands.Cog):
             embed.set_footer(text="Teams are balanced based on custom MMR! Click a button after the match to update MMR.")
             
             # Create view with buttons
-            view = MatchResultView(match_id, team1_ids, team2_ids, self.api_client)
+            view = MatchResultView(match_id, team1_ids, team2_ids, str(interaction.guild_id), self.api_client)
             
             await interaction.followup.send(embed=embed, view=view)
             
@@ -257,6 +264,10 @@ class TeamsCommand(commands.Cog):
     async def generate_teams_voice(self, interaction: discord.Interaction):
         """Generate balanced teams from members in the voice channel."""
         await interaction.response.defer(thinking=True)
+        
+        if not interaction.guild_id:
+            await interaction.followup.send("This command can only be used in a server!", ephemeral=True)
+            return
         
         # Check if user is in a voice channel
         if not interaction.user.voice or not interaction.user.voice.channel:
@@ -302,7 +313,7 @@ class TeamsCommand(commands.Cog):
         
         try:
             # Call API to generate teams
-            result = await self.api_client.generate_teams(discord_ids)
+            result = await self.api_client.generate_teams(discord_ids, str(interaction.guild_id))
             
             team1 = result["team1"]
             team2 = result["team2"]
@@ -340,7 +351,7 @@ class TeamsCommand(commands.Cog):
             embed.set_footer(text="Teams are balanced based on custom MMR! Click a button after the match to update MMR.")
             
             # Create view with buttons
-            view = MatchResultView(match_id, team1_ids, team2_ids, self.api_client)
+            view = MatchResultView(match_id, team1_ids, team2_ids, str(interaction.guild_id), self.api_client)
             
             await interaction.followup.send(embed=embed, view=view)
             

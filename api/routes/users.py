@@ -61,18 +61,19 @@ async def connect_league_account(account: LeagueAccountConnect):
             highest_rank=highest_rank
         )
         
-        # Get custom_mmr from user record
-        custom_mmr = user.get("custom_mmr")
+        # Get or create guild_user entry and get custom_mmr
+        guild_user = await db_service.get_or_create_guild_user(account.guild_id, account.discord_id, 1000)
+        custom_mmr = guild_user.get("custom_mmr", 1000)
         
-        # If MMR doesn't exist (None) or is default (1000), calculate from tier
-        if custom_mmr is None or custom_mmr == 1000:
+        # If MMR is default (1000), calculate from tier
+        if custom_mmr == 1000:
             if highest_tier:
                 # Calculate MMR based on tier and rank
                 tier_based_mmr = riot_client.tier_to_value(highest_tier, highest_rank)
                 logger.info(f"[API] Setting initial MMR from tier: {highest_tier} {highest_rank} = {tier_based_mmr}")
                 
-                # Update user's MMR in database
-                await db_service.update_player_mmr(account.discord_id, tier_based_mmr)
+                # Update user's MMR in database (guild-specific)
+                await db_service.update_player_mmr(account.discord_id, tier_based_mmr, account.guild_id)
                 custom_mmr = tier_based_mmr
             else:
                 # No tier available, use default
@@ -120,16 +121,16 @@ async def connect_league_account(account: LeagueAccountConnect):
 
 
 @router.get("/leaderboard")
-async def get_leaderboard(limit: int = 20):
-    """Get MMR leaderboard."""
-    leaderboard = await db_service.get_mmr_leaderboard(limit)
+async def get_leaderboard(guild_id: str, limit: int = 20):
+    """Get MMR leaderboard for a specific guild."""
+    leaderboard = await db_service.get_mmr_leaderboard(guild_id, limit)
     return {"leaderboard": leaderboard}
 
 
 @router.get("/{discord_id}", response_model=LeagueAccountResponse)
-async def get_user_account(discord_id: str):
-    """Get League account information for a Discord user."""
-    account = await db_service.get_league_account(discord_id)
+async def get_user_account(discord_id: str, guild_id: str):
+    """Get League account information for a Discord user in a specific guild."""
+    account = await db_service.get_league_account(discord_id, guild_id)
     
     if not account:
         raise HTTPException(status_code=404, detail="Account not found")
@@ -146,8 +147,8 @@ async def get_user_account(discord_id: str):
 
 
 @router.get("/{discord_id}/match-history")
-async def get_user_match_history(discord_id: str, limit: int = 50):
-    """Get match history for a user with MMR progression."""
-    history = await db_service.get_player_match_history(discord_id, limit)
+async def get_user_match_history(discord_id: str, guild_id: str, limit: int = 50):
+    """Get match history for a user with MMR progression in a specific guild."""
+    history = await db_service.get_player_match_history(discord_id, guild_id, limit)
     return {"matches": history}
 

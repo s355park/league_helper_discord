@@ -8,6 +8,7 @@ class LeagueAccountConnect(BaseModel):
     discord_id: str
     game_name: str
     tag_line: str
+    guild_id: str  # Discord server (guild) ID
 
 
 class LeagueAccountResponse(BaseModel):
@@ -35,6 +36,7 @@ class PlayerInfo(BaseModel):
 class GenerateTeamsRequest(BaseModel):
     """Request schema for generating teams."""
     discord_ids: List[str]  # List of 10 Discord IDs
+    guild_id: str  # Discord server (guild) ID
 
 
 class Team(BaseModel):
@@ -57,6 +59,7 @@ class MatchResultRequest(BaseModel):
     winning_team: int  # 1 or 2
     team1_discord_ids: List[str]
     team2_discord_ids: List[str]
+    guild_id: str  # Discord server (guild) ID
 
 
 class MatchResultResponse(BaseModel):

@@ -40,11 +40,16 @@ class ConnectCommand(commands.Cog):
         
         try:
             # Call API to connect account
+            if not interaction.guild_id:
+                await interaction.followup.send("This command can only be used in a server!", ephemeral=True)
+                return
+            
             print(f"[Bot] Calling API client...", flush=True)
             account = await self.api_client.connect_account(
                 str(interaction.user.id),
                 game_name,
-                tag_line
+                tag_line,
+                str(interaction.guild_id)
             )
             print(f"[Bot] Got account from API: {account}")
             
@@ -111,14 +116,33 @@ class ConnectCommand(commands.Cog):
                 except:
                     pass
     
+    @app_commands.command(name="guild-id", description="Get the current server's (guild) ID")
+    async def guild_id(self, interaction: discord.Interaction):
+        """Display the current server's guild ID."""
+        if not interaction.guild_id:
+            await interaction.response.send_message("This command can only be used in a server!", ephemeral=True)
+            return
+        
+        embed = discord.Embed(
+            title="🆔 Server ID (Guild ID)",
+            description=f"**Guild ID:** `{interaction.guild_id}`\n\n**Server Name:** {interaction.guild.name}",
+            color=discord.Color.blue()
+        )
+        embed.set_footer(text="Use this ID in the migration to replace 'default'")
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+    
     @app_commands.command(name="me", description="View your connected League of Legends account")
     async def me(self, interaction: discord.Interaction):
         """View your connected League account profile."""
         await interaction.response.defer(thinking=True)
         
         try:
+            if not interaction.guild_id:
+                await interaction.followup.send("This command can only be used in a server!", ephemeral=True)
+                return
+            
             # Get user account from API
-            account = await self.api_client.get_user_account(str(interaction.user.id))
+            account = await self.api_client.get_user_account(str(interaction.user.id), str(interaction.guild_id))
             
             tier = account.get("highest_tier")
             rank = account.get("highest_rank")

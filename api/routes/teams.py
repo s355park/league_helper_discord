@@ -28,8 +28,8 @@ async def generate_teams(request: GenerateTeamsRequest):
             detail="Exactly 10 Discord IDs are required"
         )
     
-    # Get all player accounts from database
-    accounts = await db_service.get_players_by_discord_ids(request.discord_ids)
+    # Get all player accounts from database with guild-specific MMR
+    accounts = await db_service.get_players_by_discord_ids(request.discord_ids, request.guild_id)
     
     if len(accounts) != 10:
         missing = set(request.discord_ids) - {acc["discord_id"] for acc in accounts}
@@ -92,9 +92,9 @@ async def record_match_result(result: MatchResultRequest):
             detail="winning_team must be 1 or 2"
         )
     
-    # Get current MMRs for all players
+    # Get current MMRs for all players with guild-specific MMR
     all_discord_ids = result.team1_discord_ids + result.team2_discord_ids
-    accounts = await db_service.get_players_by_discord_ids(all_discord_ids)
+    accounts = await db_service.get_players_by_discord_ids(all_discord_ids, result.guild_id)
     
     if len(accounts) != 10:
         raise HTTPException(
@@ -118,16 +118,16 @@ async def record_match_result(result: MatchResultRequest):
     )
     team2_change = -team1_change
     
-    # Update MMRs for all players
+    # Update MMRs for all players (guild-specific)
     mmr_changes = {}
     for discord_id in result.team1_discord_ids:
         new_mmr = mmr_map[discord_id] + team1_change
-        await db_service.update_player_mmr(discord_id, new_mmr)
+        await db_service.update_player_mmr(discord_id, new_mmr, result.guild_id)
         mmr_changes[discord_id] = team1_change
     
     for discord_id in result.team2_discord_ids:
         new_mmr = mmr_map[discord_id] + team2_change
-        await db_service.update_player_mmr(discord_id, new_mmr)
+        await db_service.update_player_mmr(discord_id, new_mmr, result.guild_id)
         mmr_changes[discord_id] = team2_change
     
     # Record match in database with player MMRs (before match)
@@ -139,6 +139,7 @@ async def record_match_result(result: MatchResultRequest):
         team1_avg_mmr=int(team1_avg),
         team2_avg_mmr=int(team2_avg),
         mmr_change=abs(team1_change),
+        guild_id=result.guild_id,
         player_mmrs=mmr_map  # Store MMRs before the match
     )
     

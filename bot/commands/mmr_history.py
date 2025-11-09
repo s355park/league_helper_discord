@@ -23,13 +23,17 @@ class MMRHistoryCommand(commands.Cog):
         """Display MMR history graph."""
         await interaction.response.defer(thinking=True)
         
+        if not interaction.guild_id:
+            await interaction.followup.send("This command can only be used in a server!", ephemeral=True)
+            return
+        
         try:
             # Get match history from API
             discord_id = str(interaction.user.id)
             url = f"{self.api_client.base_url}/users/{discord_id}/match-history"
             
             async with httpx.AsyncClient() as client:
-                response = await client.get(url, timeout=10.0)
+                response = await client.get(url, params={"guild_id": str(interaction.guild_id)}, timeout=10.0)
                 response.raise_for_status()
                 data = response.json()
             
@@ -45,7 +49,7 @@ class MMRHistoryCommand(commands.Cog):
                 return
             
             # Get current MMR
-            account = await self.api_client.get_user_account(discord_id)
+            account = await self.api_client.get_user_account(discord_id, str(interaction.guild_id))
             current_mmr = account.get("custom_mmr", 1000)
             
             # Prepare data for graph

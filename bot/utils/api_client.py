@@ -14,14 +14,16 @@ class APIClient:
         self,
         discord_id: str,
         game_name: str,
-        tag_line: str
+        tag_line: str,
+        guild_id: str
     ) -> Dict[str, Any]:
         """Connect a Discord user to their League account."""
         url = f"{self.base_url}/users/connect"
         data = {
             "discord_id": discord_id,
             "game_name": game_name,
-            "tag_line": tag_line
+            "tag_line": tag_line,
+            "guild_id": guild_id
         }
         
         print(f"[Bot] Making request to {url}", flush=True)
@@ -43,13 +45,14 @@ class APIClient:
         except httpx.HTTPStatusError as e:
             raise Exception(f"API error: {e.response.status_code} - {e.response.text}")
     
-    async def get_user_account(self, discord_id: str) -> Dict[str, Any]:
+    async def get_user_account(self, discord_id: str, guild_id: str) -> Dict[str, Any]:
         """Get League account for a Discord user."""
         url = f"{self.base_url}/users/{discord_id}"
+        params = {"guild_id": guild_id}
         
         try:
             async with httpx.AsyncClient() as client:
-                response = await client.get(url, timeout=10.0)
+                response = await client.get(url, params=params, timeout=10.0)
                 response.raise_for_status()
                 return response.json()
         except httpx.ConnectError as e:
@@ -61,10 +64,10 @@ class APIClient:
                 raise Exception("Account not found")
             raise Exception(f"API error: {e.response.status_code} - {e.response.text}")
     
-    async def generate_teams(self, discord_ids: List[str]) -> Dict[str, Any]:
+    async def generate_teams(self, discord_ids: List[str], guild_id: str) -> Dict[str, Any]:
         """Generate balanced teams from Discord user IDs."""
         url = f"{self.base_url}/teams/generate"
-        data = {"discord_ids": discord_ids}
+        data = {"discord_ids": discord_ids, "guild_id": guild_id}
         
         try:
             async with httpx.AsyncClient() as client:
@@ -83,7 +86,8 @@ class APIClient:
         match_id: str,
         winning_team: int,
         team1_discord_ids: List[str],
-        team2_discord_ids: List[str]
+        team2_discord_ids: List[str],
+        guild_id: str
     ) -> Dict[str, Any]:
         """Record the result of a match and update player MMRs."""
         url = f"{self.base_url}/teams/match-result"
@@ -91,7 +95,8 @@ class APIClient:
             "match_id": match_id,
             "winning_team": winning_team,
             "team1_discord_ids": team1_discord_ids,
-            "team2_discord_ids": team2_discord_ids
+            "team2_discord_ids": team2_discord_ids,
+            "guild_id": guild_id
         }
         
         try:
