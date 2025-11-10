@@ -112,4 +112,31 @@ class APIClient:
             raise ConnectionError(f"Request to API timed out. The server may be overloaded.")
         except httpx.HTTPStatusError as e:
             raise Exception(f"API error: {e.response.status_code} - {e.response.text}")
+    
+    async def modify_player_mmr(
+        self,
+        discord_id: str,
+        new_mmr: int,
+        guild_id: str
+    ) -> Dict[str, Any]:
+        """Modify a player's MMR for a specific guild."""
+        url = f"{self.base_url}/users/{discord_id}/mmr"
+        params = {
+            "guild_id": guild_id,
+            "new_mmr": new_mmr
+        }
+        
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.put(url, params=params, timeout=10.0)
+                response.raise_for_status()
+                return response.json()
+        except httpx.ConnectError as e:
+            raise ConnectionError(f"Failed to connect to API at {url}. Error: {str(e)}\n\nIs the FastAPI server running? Try: python -m uvicorn api.main:app --reload")
+        except httpx.TimeoutException:
+            raise ConnectionError(f"Request to API timed out. The server may be overloaded.")
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                raise Exception("Account not found")
+            raise Exception(f"API error: {e.response.status_code} - {e.response.text}")
 

@@ -1,5 +1,6 @@
 """Discord bot entry point."""
 import discord
+from discord import app_commands
 from discord.ext import commands
 import asyncio
 import sys
@@ -13,7 +14,7 @@ if project_root not in sys.path:
 from config import Config
 
 # Import commands
-from bot.commands import connect, teams, attendance, mmr_history, leaderboard
+from bot.commands import connect, teams, attendance, mmr_history, leaderboard, modify_mmr
 
 
 class LeagueTeamBot(commands.Bot):
@@ -38,6 +39,7 @@ class LeagueTeamBot(commands.Bot):
         await self.add_cog(attendance.AttendanceCommand(self))
         await self.add_cog(mmr_history.MMRHistoryCommand(self))
         await self.add_cog(leaderboard.LeaderboardCommand(self))
+        await self.add_cog(modify_mmr.ModifyMMRCommand(self))
         
         # Sync commands globally (available to all guilds)
         try:
@@ -91,10 +93,21 @@ class LeagueTeamBot(commands.Bot):
         
         # Try to send error message to user
         try:
-            if interaction.response.is_done():
-                await interaction.followup.send(f"❌ Error: {str(error)}", ephemeral=True)
+            if isinstance(error, app_commands.MissingPermissions):
+                embed = discord.Embed(
+                    title="❌ Permission Denied",
+                    description="You don't have the required permissions to use this command.",
+                    color=discord.Color.red()
+                )
+                if interaction.response.is_done():
+                    await interaction.followup.send(embed=embed, ephemeral=True)
+                else:
+                    await interaction.response.send_message(embed=embed, ephemeral=True)
             else:
-                await interaction.response.send_message(f"❌ Error: {str(error)}", ephemeral=True)
+                if interaction.response.is_done():
+                    await interaction.followup.send(f"❌ Error: {str(error)}", ephemeral=True)
+                else:
+                    await interaction.response.send_message(f"❌ Error: {str(error)}", ephemeral=True)
         except:
             pass
 

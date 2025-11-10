@@ -152,3 +152,48 @@ async def get_user_match_history(discord_id: str, guild_id: str, limit: int = 50
     history = await db_service.get_player_match_history(discord_id, guild_id, limit)
     return {"matches": history}
 
+
+@router.put("/{discord_id}/mmr")
+async def modify_player_mmr(discord_id: str, guild_id: str, new_mmr: int):
+    """
+    Modify a player's MMR for a specific guild.
+    
+    Note: Permission checks should be done by the Discord bot (administrator only).
+    """
+    import logging
+    logger = logging.getLogger("api")
+    
+    try:
+        logger.info(f"[API] /modify-mmr called for Discord ID: {discord_id}, Guild ID: {guild_id}, New MMR: {new_mmr}")
+        
+        # Validate MMR value
+        if new_mmr < 0:
+            raise HTTPException(status_code=400, detail="MMR must be a positive integer (0 or greater)")
+        
+        # Check if account exists
+        account = await db_service.get_league_account(discord_id, guild_id)
+        if not account:
+            raise HTTPException(status_code=404, detail="Account not found")
+        
+        # Get current MMR
+        old_mmr = account.get("custom_mmr", 1000)
+        
+        # Update MMR
+        await db_service.update_player_mmr(discord_id, new_mmr, guild_id)
+        
+        logger.info(f"[API] MMR updated: {discord_id} from {old_mmr} to {new_mmr}")
+        
+        return {
+            "discord_id": discord_id,
+            "old_mmr": old_mmr,
+            "new_mmr": new_mmr,
+            "message": f"MMR updated from {old_mmr} to {new_mmr}"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[API] Exception in /modify-mmr: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
