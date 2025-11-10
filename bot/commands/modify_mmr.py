@@ -30,7 +30,7 @@ class ModifyMMRCommand(commands.Cog):
         user = interaction.user
         guild = interaction.guild
         
-        # Verify permissions programmatically (for logging)
+        # Verify permissions programmatically (for logging and double-check)
         has_admin = user.guild_permissions.administrator if guild else False
         is_owner = user.id == guild.owner_id if guild else False
         
@@ -41,11 +41,25 @@ class ModifyMMRCommand(commands.Cog):
         print(f"[Bot]   - New MMR: {new_mmr}", flush=True)
         print(f"[Bot]   - Guild: {guild.name if guild else 'DM'} (ID: {guild.id if guild else 'N/A'})", flush=True)
         
-        await interaction.response.defer(thinking=True)
-        
-        if not interaction.guild_id:
-            await interaction.followup.send("This command can only be used in a server!", ephemeral=True)
+        # Double-check permissions and respond immediately if missing
+        if not guild:
+            await interaction.response.send_message(
+                "This command can only be used in a server!",
+                ephemeral=True
+            )
             return
+        
+        if not has_admin and not is_owner:
+            print(f"[Bot] PERMISSION CHECK FAILED - User does not have admin permission", flush=True)
+            embed = discord.Embed(
+                title="❌ Permission Denied",
+                description="You need **Administrator** permission to use this command.",
+                color=discord.Color.red()
+            )
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+        
+        await interaction.response.defer(thinking=True)
         
         # Validate MMR value
         if new_mmr < 0:

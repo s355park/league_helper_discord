@@ -14,8 +14,7 @@ if project_root not in sys.path:
 from config import Config
 
 # Import commands
-from bot.commands import connect, teams, attendance, mmr_history, leaderboard
-import bot.commands.modify_mmr as modify_mmr
+from bot.commands import connect, teams, attendance, mmr_history, leaderboard, modify_mmr
 
 
 class LeagueTeamBot(commands.Bot):
@@ -42,13 +41,20 @@ class LeagueTeamBot(commands.Bot):
         await self.add_cog(leaderboard.LeaderboardCommand(self))
         await self.add_cog(modify_mmr.ModifyMMRCommand(self))
         
+        # List all registered commands before syncing
+        print("\n📋 Registered commands before sync:", flush=True)
+        for cmd in self.tree.get_commands():
+            print(f"   - {cmd.name} (type: {type(cmd).__name__})", flush=True)
+            if hasattr(cmd, 'checks'):
+                print(f"     Checks: {cmd.checks}", flush=True)
+        
         # Sync commands globally (available to all guilds)
         try:
-            print("Syncing commands globally...", flush=True)
+            print("\n🔄 Syncing commands globally...", flush=True)
             synced = await self.tree.sync()
             print(f"✅ Synced {len(synced)} command(s) globally", flush=True)
             for cmd in synced:
-                print(f"   - {cmd.name}", flush=True)
+                print(f"   - {cmd.name} (ID: {cmd.id})", flush=True)
         except Exception as e:
             print(f"❌ Failed to sync commands: {e}", flush=True)
             import traceback
@@ -61,16 +67,26 @@ class LeagueTeamBot(commands.Bot):
         print(f"API Base URL: {Config.API_BASE_URL}", flush=True)
         print(f"FastAPI should be running at: {Config.API_BASE_URL}", flush=True)
         
-        # Clear any existing guild-specific commands to avoid duplicates
-        # (Global commands will be available to all guilds)
-        print("\n🧹 Clearing duplicate guild-specific commands...")
+        # List all commands in the tree
+        print("\n📋 All commands in command tree:", flush=True)
+        for cmd in self.tree.get_commands():
+            checks_info = ""
+            if hasattr(cmd, 'checks') and cmd.checks:
+                checks_info = f" [has {len(cmd.checks)} check(s)]"
+            print(f"   - /{cmd.name}{checks_info}", flush=True)
+        
+        # Force sync commands to each guild to ensure they're available
+        # This helps with Discord's caching and ensures commands with permission checks are visible
+        print("\n🔄 Syncing commands to each guild...")
         for guild in self.guilds:
             try:
+                # Clear any guild-specific commands first to avoid duplicates
                 self.tree.clear_commands(guild=guild)
-                await self.tree.sync(guild=guild)
-                print(f"   ✅ Cleared duplicates in '{guild.name}'")
+                # Sync global commands to this guild (forces Discord to update)
+                synced = await self.tree.sync(guild=guild)
+                print(f"   ✅ Synced {len(synced)} command(s) to '{guild.name}' (ID: {guild.id})")
             except Exception as e:
-                print(f"   ⚠️ Could not clear commands in '{guild.name}': {e}")
+                print(f"   ⚠️ Could not sync commands to '{guild.name}': {e}")
     
     async def on_command_error(self, ctx, error):
         """Handle command errors."""
