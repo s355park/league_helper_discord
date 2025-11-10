@@ -26,6 +26,21 @@ class ModifyMMRCommand(commands.Cog):
         new_mmr: int
     ):
         """Modify a player's MMR (administrator only)."""
+        # Log who is attempting to use the command
+        user = interaction.user
+        guild = interaction.guild
+        
+        # Verify permissions programmatically (for logging)
+        has_admin = user.guild_permissions.administrator if guild else False
+        is_owner = user.id == guild.owner_id if guild else False
+        
+        print(f"[Bot] modify-mmr command called by: {user} (ID: {user.id})", flush=True)
+        print(f"[Bot]   - Has Administrator permission: {has_admin}", flush=True)
+        print(f"[Bot]   - Is server owner: {is_owner}", flush=True)
+        print(f"[Bot]   - Target player: {player} (ID: {player.id})", flush=True)
+        print(f"[Bot]   - New MMR: {new_mmr}", flush=True)
+        print(f"[Bot]   - Guild: {guild.name if guild else 'DM'} (ID: {guild.id if guild else 'N/A'})", flush=True)
+        
         await interaction.response.defer(thinking=True)
         
         if not interaction.guild_id:

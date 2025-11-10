@@ -95,9 +95,31 @@ class LeagueTeamBot(commands.Bot):
         # Try to send error message to user
         try:
             if isinstance(error, app_commands.MissingPermissions):
+                # Log permission denial for auditing with detailed debug info
+                user = interaction.user
+                guild = interaction.guild
+                member = guild.get_member(user.id) if guild else None
+                
+                print(f"[Bot] PERMISSION DENIED - User: {user} (ID: {user.id}) attempted to use {interaction.command.name}", flush=True)
+                print(f"[Bot]   - Guild: {guild.name if guild else 'DM'} (ID: {guild.id if guild else 'N/A'})", flush=True)
+                if guild:
+                    print(f"[Bot]   - Guild owner ID: {guild.owner_id}", flush=True)
+                    print(f"[Bot]   - User ID: {user.id}", flush=True)
+                    print(f"[Bot]   - Is owner: {user.id == guild.owner_id}", flush=True)
+                if member:
+                    print(f"[Bot]   - Member object found: {member}", flush=True)
+                    print(f"[Bot]   - Member guild_permissions: {member.guild_permissions}", flush=True)
+                    print(f"[Bot]   - Member has admin: {member.guild_permissions.administrator}", flush=True)
+                    print(f"[Bot]   - Member top_role: {member.top_role}", flush=True)
+                else:
+                    print(f"[Bot]   - Member object NOT found (user might not be in guild cache)", flush=True)
+                print(f"[Bot]   - User guild_permissions (from interaction): {user.guild_permissions if hasattr(user, 'guild_permissions') else 'N/A'}", flush=True)
+                if hasattr(user, 'guild_permissions'):
+                    print(f"[Bot]   - User has admin (from interaction): {user.guild_permissions.administrator}", flush=True)
+                
                 embed = discord.Embed(
                     title="❌ Permission Denied",
-                    description="You don't have the required permissions to use this command.",
+                    description="You need **Administrator** permission to use this command.",
                     color=discord.Color.red()
                 )
                 if interaction.response.is_done():
