@@ -49,8 +49,10 @@ class MMRHistoryCommand(commands.Cog):
                 return
             
             # Get current MMR
+            print(f"[Bot] Getting user account for MMR history...", flush=True)
             account = await self.api_client.get_user_account(discord_id, str(interaction.guild_id))
             current_mmr = account.get("custom_mmr", 1000)
+            print(f"[Bot] Current MMR: {current_mmr}", flush=True)
             
             # Prepare data for graph
             # Reverse matches to show chronological order (oldest to newest)
@@ -97,7 +99,12 @@ class MMRHistoryCommand(commands.Cog):
                 return
             
             # Create graph
-            fig, ax = plt.subplots(figsize=(12, 6))
+            print(f"[Bot] Creating matplotlib graph...", flush=True)
+            try:
+                fig, ax = plt.subplots(figsize=(12, 6))
+            except Exception as e:
+                print(f"[Bot] ERROR creating matplotlib figure: {e}", flush=True)
+                raise
             ax.plot(match_numbers, mmr_values, linewidth=2, color='#5865F2', marker='o', markersize=6)
             
             # Add win/loss markers
@@ -145,12 +152,20 @@ class MMRHistoryCommand(commands.Cog):
             plt.tight_layout()
             
             # Save to bytes
+            print(f"[Bot] Saving graph to bytes...", flush=True)
             buf = io.BytesIO()
-            plt.savefig(buf, format='png', facecolor='#2F3136', dpi=100, bbox_inches='tight')
-            buf.seek(0)
-            plt.close()
+            try:
+                plt.savefig(buf, format='png', facecolor='#2F3136', dpi=100, bbox_inches='tight')
+                buf.seek(0)
+                plt.close()
+                print(f"[Bot] Graph saved successfully, size: {len(buf.getvalue())} bytes", flush=True)
+            except Exception as e:
+                plt.close()
+                print(f"[Bot] ERROR saving graph: {e}", flush=True)
+                raise
             
             # Create embed
+            print(f"[Bot] Creating embed and sending response...", flush=True)
             embed = discord.Embed(
                 title="📊 MMR History",
                 description=f"Your MMR progression over {len(matches)} match(es)",
@@ -162,6 +177,7 @@ class MMRHistoryCommand(commands.Cog):
             # Send graph
             file = discord.File(buf, filename="mmr_history.png")
             await interaction.followup.send(embed=embed, file=file)
+            print(f"[Bot] MMR history sent successfully!", flush=True)
             
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 404:
