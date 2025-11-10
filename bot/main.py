@@ -14,7 +14,8 @@ if project_root not in sys.path:
 from config import Config
 
 # Import commands
-from bot.commands import connect, teams, attendance, mmr_history, leaderboard, modify_mmr
+from bot.commands import connect, teams, attendance, mmr_history, leaderboard
+import bot.commands.modify_mmr as modify_mmr
 
 
 class LeagueTeamBot(commands.Bot):
