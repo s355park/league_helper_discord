@@ -177,15 +177,25 @@ class DatabaseService:
     async def get_player_match_history(self, discord_id: str, guild_id: str, limit: int = 50) -> list[Dict[str, Any]]:
         """Get match history for a player with their MMR at match time in a specific guild."""
         # Get matches where player participated in this guild
-        # Use contains operator to check if discord_id is in the arrays
+        # First filter by guild_id, then check if player is in either team
+        # We need to get all matches for this guild, then filter in Python for player participation
         result = self.client.table("matches").select(
-            "id, match_id, created_at, winning_team, team1_player_ids, team2_player_ids, player_mmrs, mmr_change"
-        ).eq("guild_id", guild_id).or_(
-            f"team1_player_ids.cs.{{{discord_id}}},team2_player_ids.cs.{{{discord_id}}}"
-        ).order("created_at", desc=True).limit(limit).execute()
+            "id, match_id, created_at, winning_team, team1_player_ids, team2_player_ids, player_mmrs, mmr_change, guild_id"
+        ).eq("guild_id", guild_id).order("created_at", desc=True).limit(limit * 2).execute()
         
-        matches = []
+        # Filter to only matches where this player participated
+        player_matches = []
         for match in (result.data if result.data else []):
+            team1_ids = match.get("team1_player_ids", [])
+            team2_ids = match.get("team2_player_ids", [])
+            if discord_id in team1_ids or discord_id in team2_ids:
+                player_matches.append(match)
+                if len(player_matches) >= limit:
+                    break
+        
+        # Process the filtered matches
+        matches = []
+        for match in player_matches:
             # Determine which team the player was on
             team = 1 if discord_id in match.get("team1_player_ids", []) else 2
             won = match["winning_team"] == team
