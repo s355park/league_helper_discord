@@ -26,6 +26,9 @@ class ModifyMMRCommand(commands.Cog):
         new_mmr: int
     ):
         """Modify a player's MMR (administrator only)."""
+        print(f"[Bot] modify_mmr function CALLED - User: {interaction.user} (ID: {interaction.user.id})", flush=True)
+        print(f"[Bot] Guild: {interaction.guild.name if interaction.guild else 'None'} (ID: {interaction.guild.id if interaction.guild else 'None'})", flush=True)
+        
         # Manual permission check to ensure we always respond
         if not interaction.guild:
             await interaction.response.send_message(
