@@ -104,11 +104,12 @@ class LeagueTeamBot(commands.Bot):
     
     async def on_app_command_error(self, interaction: discord.Interaction, error: discord.app_commands.AppCommandError):
         """Handle application command errors."""
-        print(f"[Bot] Command error in {interaction.command.name}: {error}", flush=True)
+        print(f"[Bot] Command error in {interaction.command.name if interaction.command else 'unknown'}: {error}", flush=True)
+        print(f"[Bot] Error type: {type(error).__name__}", flush=True)
         import traceback
         traceback.print_exc()
         
-        # Try to send error message to user
+        # Try to send error message to user - ALWAYS respond to avoid timeout
         try:
             if isinstance(error, app_commands.MissingPermissions):
                 # Log permission denial for auditing with detailed debug info
@@ -116,7 +117,7 @@ class LeagueTeamBot(commands.Bot):
                 guild = interaction.guild
                 member = guild.get_member(user.id) if guild else None
                 
-                print(f"[Bot] PERMISSION DENIED - User: {user} (ID: {user.id}) attempted to use {interaction.command.name}", flush=True)
+                print(f"[Bot] PERMISSION DENIED - User: {user} (ID: {user.id}) attempted to use {interaction.command.name if interaction.command else 'unknown'}", flush=True)
                 print(f"[Bot]   - Guild: {guild.name if guild else 'DM'} (ID: {guild.id if guild else 'N/A'})", flush=True)
                 if guild:
                     print(f"[Bot]   - Guild owner ID: {guild.owner_id}", flush=True)
@@ -138,17 +139,33 @@ class LeagueTeamBot(commands.Bot):
                     description="You need **Administrator** permission to use this command.",
                     color=discord.Color.red()
                 )
-                if interaction.response.is_done():
-                    await interaction.followup.send(embed=embed, ephemeral=True)
-                else:
+                
+                # Always try to respond - check if already responded
+                if not interaction.response.is_done():
+                    print(f"[Bot] Sending permission denied response (response not done)", flush=True)
                     await interaction.response.send_message(embed=embed, ephemeral=True)
-            else:
-                if interaction.response.is_done():
-                    await interaction.followup.send(f"❌ Error: {str(error)}", ephemeral=True)
                 else:
-                    await interaction.response.send_message(f"❌ Error: {str(error)}", ephemeral=True)
-        except:
-            pass
+                    print(f"[Bot] Response already done, sending followup", flush=True)
+                    await interaction.followup.send(embed=embed, ephemeral=True)
+            else:
+                # Handle other errors
+                error_msg = f"❌ Error: {str(error)}"
+                if not interaction.response.is_done():
+                    print(f"[Bot] Sending error response (response not done)", flush=True)
+                    await interaction.response.send_message(error_msg, ephemeral=True)
+                else:
+                    print(f"[Bot] Response already done, sending error followup", flush=True)
+                    await interaction.followup.send(error_msg, ephemeral=True)
+        except Exception as e:
+            print(f"[Bot] ERROR in error handler: {e}", flush=True)
+            import traceback
+            traceback.print_exc()
+            # Last resort - try to respond anyway
+            try:
+                if not interaction.response.is_done():
+                    await interaction.response.send_message("❌ An error occurred. Please try again.", ephemeral=True)
+            except:
+                pass
 
 
 async def main():
