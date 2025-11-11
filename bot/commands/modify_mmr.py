@@ -26,11 +26,29 @@ class ModifyMMRCommand(commands.Cog):
         new_mmr: int
     ):
         """Modify a player's MMR (administrator only)."""
-        await interaction.response.defer(thinking=True)
-        
-        if not interaction.guild_id:
-            await interaction.followup.send("This command can only be used in a server!", ephemeral=True)
+        # Manual permission check to ensure we always respond
+        if not interaction.guild:
+            await interaction.response.send_message(
+                "This command can only be used in a server!",
+                ephemeral=True
+            )
             return
+        
+        user = interaction.user
+        has_admin = user.guild_permissions.administrator
+        is_owner = user.id == interaction.guild.owner_id
+        
+        if not has_admin and not is_owner:
+            print(f"[Bot] PERMISSION CHECK FAILED - User {user} (ID: {user.id}) does not have admin permission", flush=True)
+            embed = discord.Embed(
+                title="❌ Permission Denied",
+                description="You need **Administrator** permission to use this command.",
+                color=discord.Color.red()
+            )
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+        
+        await interaction.response.defer(thinking=True)
         
         # Validate MMR value
         if new_mmr < 0:

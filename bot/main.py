@@ -99,19 +99,32 @@ class LeagueTeamBot(commands.Bot):
     async def on_interaction(self, interaction: discord.Interaction):
         """Log all interactions for debugging."""
         if interaction.type == discord.InteractionType.application_command:
-            print(f"[Bot] Received command: {interaction.command.name} from {interaction.user} ({interaction.user.id})", flush=True)
-        return await super().on_interaction(interaction)
+            print(f"[Bot] Received command: {interaction.command.name if interaction.command else 'unknown'} from {interaction.user} ({interaction.user.id})", flush=True)
+            # Check if this is a command with permission checks
+            if interaction.command and hasattr(interaction.command, 'checks') and interaction.command.checks:
+                print(f"[Bot] Command has {len(interaction.command.checks)} permission check(s)", flush=True)
+        try:
+            return await super().on_interaction(interaction)
+        except Exception as e:
+            print(f"[Bot] ERROR in on_interaction: {e}", flush=True)
+            import traceback
+            traceback.print_exc()
+            raise
     
     async def on_app_command_error(self, interaction: discord.Interaction, error: discord.app_commands.AppCommandError):
         """Handle application command errors."""
+        print(f"[Bot] ========== ERROR HANDLER CALLED ==========", flush=True)
         print(f"[Bot] Command error in {interaction.command.name if interaction.command else 'unknown'}: {error}", flush=True)
         print(f"[Bot] Error type: {type(error).__name__}", flush=True)
+        print(f"[Bot] Error class: {type(error)}", flush=True)
+        print(f"[Bot] Is MissingPermissions? {isinstance(error, app_commands.MissingPermissions)}", flush=True)
         import traceback
         traceback.print_exc()
         
         # Try to send error message to user - ALWAYS respond to avoid timeout
         try:
             if isinstance(error, app_commands.MissingPermissions):
+                print(f"[Bot] Handling MissingPermissions error", flush=True)
                 # Log permission denial for auditing with detailed debug info
                 user = interaction.user
                 guild = interaction.guild
