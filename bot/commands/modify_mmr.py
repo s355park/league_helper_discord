@@ -142,6 +142,33 @@ class ModifyMMRCommand(commands.Cog):
             await interaction.followup.send(embed=embed, ephemeral=True)
             import traceback
             traceback.print_exc()
+    
+    @app_commands.error
+    async def modify_mmr_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+        """Handle errors for app commands in this cog."""
+        # Only handle errors for the modify_mmr command
+        if interaction.command and interaction.command.name == "modify-mmr":
+            print(f"[Bot] modify_mmr.error handler called - Error: {error}", flush=True)
+            print(f"[Bot] Error type: {type(error).__name__}", flush=True)
+            
+            if isinstance(error, app_commands.MissingPermissions):
+                print(f"[Bot] MissingPermissions error caught in modify_mmr.error", flush=True)
+                embed = discord.Embed(
+                    title="❌ Permission Denied",
+                    description="You need **Administrator** permission to use this command.",
+                    color=discord.Color.red()
+                )
+                
+                if not interaction.response.is_done():
+                    print(f"[Bot] Sending permission denied response", flush=True)
+                    await interaction.response.send_message(embed=embed, ephemeral=True)
+                else:
+                    print(f"[Bot] Response already done, sending followup", flush=True)
+                    await interaction.followup.send(embed=embed, ephemeral=True)
+                return
+        
+        # Re-raise other errors to be handled by the global error handler
+        raise error
 
 
 async def setup(bot: commands.Bot):
