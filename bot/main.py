@@ -14,7 +14,7 @@ if project_root not in sys.path:
 from config import Config
 
 # Import commands
-from bot.commands import connect, teams, attendance, mmr_history, leaderboard, modify_mmr
+from bot.commands import connect, teams, attendance, mmr_history, leaderboard, modify_mmr, help
 
 
 class LeagueTeamBot(commands.Bot):
@@ -40,6 +40,7 @@ class LeagueTeamBot(commands.Bot):
         await self.add_cog(mmr_history.MMRHistoryCommand(self))
         await self.add_cog(leaderboard.LeaderboardCommand(self))
         await self.add_cog(modify_mmr.ModifyMMRCommand(self))
+        await self.add_cog(help.HelpCommand(self))
         
         # List all registered commands before syncing
         print("\n📋 Registered commands before sync:", flush=True)
