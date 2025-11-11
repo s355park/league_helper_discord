@@ -59,6 +59,35 @@ class LeagueTeamBot(commands.Bot):
             print(f"❌ Failed to sync commands: {e}", flush=True)
             import traceback
             traceback.print_exc()
+
+        # Attach tree-level error handler (equivalent to @client.tree.error)
+        async def _tree_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+            # Unwrap original exception
+            err = getattr(error, "original", error)
+
+            # Ensure we always respond within the interaction window
+            async def _safe_respond(message: str):
+                if interaction.response.is_done():
+                    await interaction.followup.send(message, ephemeral=True)
+                else:
+                    await interaction.response.send_message(message, ephemeral=True)
+
+            if isinstance(err, app_commands.MissingPermissions):
+                await _safe_respond("❌ You need **Administrator** to use this.")
+                return
+
+            if isinstance(err, (app_commands.MissingRole, app_commands.MissingAnyRole)):
+                await _safe_respond("❌ You don’t have the required role.")
+                return
+
+            # Fallback generic handler
+            try:
+                await _safe_respond("⚠️ Something went wrong.")
+            except Exception:
+                pass
+
+        # Register on_error handler on the tree
+        self.tree.on_error = _tree_error
     
     async def on_ready(self):
         """Called when the bot is ready."""
