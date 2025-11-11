@@ -103,13 +103,7 @@ class LeagueTeamBot(commands.Bot):
             # Check if this is a command with permission checks
             if interaction.command and hasattr(interaction.command, 'checks') and interaction.command.checks:
                 print(f"[Bot] Command has {len(interaction.command.checks)} permission check(s)", flush=True)
-        try:
-            return await super().on_interaction(interaction)
-        except Exception as e:
-            print(f"[Bot] ERROR in on_interaction: {e}", flush=True)
-            import traceback
-            traceback.print_exc()
-            raise
+        # Don't call super() - just let the default handler process it
     
     async def on_app_command_error(self, interaction: discord.Interaction, error: discord.app_commands.AppCommandError):
         """Handle application command errors."""
