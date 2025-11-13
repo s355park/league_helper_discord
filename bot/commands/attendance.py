@@ -1,4 +1,4 @@
-"""인원췤 (Headcount check) command."""
+"""Attendance check command."""
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -17,7 +17,7 @@ class AttendanceView(View):
     def update_embed(self) -> discord.Embed:
         """Create updated embed with current player list."""
         embed = discord.Embed(
-            title="🎮 인원췤 - Player Check",
+            title="🎮 Attendance Check - Player Check",
             description="Click the button below if you're ready to play today!",
             color=discord.Color.blue()
         )
@@ -122,7 +122,7 @@ class AttendanceCommand(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
     
-    @app_commands.command(name="인원췤", description="Check who's ready to play today")
+    @app_commands.command(name="attendance-check", description="Check who's ready to play today")
     async def attendance_check(self, interaction: discord.Interaction):
         """Create a player availability check."""
         view = AttendanceView()

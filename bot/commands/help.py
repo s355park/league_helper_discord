@@ -61,9 +61,9 @@ class HelpCommand(commands.Cog):
                         "admin": False
                     },
                     {
-                        "name": "인원췤",
+                        "name": "attendance-check",
                         "description": "Check who's ready to play (attendance check with buttons)",
-                        "example": "`/인원췤`",
+                        "example": "`/attendance-check`",
                         "admin": False
                     }
                 ]

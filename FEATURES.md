@@ -88,7 +88,7 @@ A comprehensive Discord bot for managing League of Legends custom games with 10 
 
 ### 4. Player Attendance
 
-#### `/인원췤` (Headcount Check)
+#### `/attendance-check` (Attendance Check)
 - **Description**: Check who's ready to play today
 - **Features**:
   - Interactive buttons for players to mark themselves as ready
@@ -173,7 +173,7 @@ A comprehensive Discord bot for managing League of Legends custom games with 10 
 | `/me` | View your profile | None |
 | `/generate-teams` | Generate teams (manual) | 10 player mentions |
 | `/generate-teams-voice` | Generate teams (voice) | None |
-| `/인원췤` | Player attendance check | None |
+| `/attendance-check` | Player attendance check | None |
 | `/mmr-history` | View MMR graph | None |
 | `/leaderboard` | View rankings | `limit` (optional) |
 

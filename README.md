@@ -27,7 +27,7 @@ A Discord bot that helps generate balanced teams for League of Legends custom ga
 - Match history stored in database
 
 ### Player Management
-- **`/인원췤`** - Check who's ready to play (interactive attendance system)
+- **`/attendance-check`** - Check who's ready to play (interactive attendance system)
 
 ### Statistics
 - **`/mmr-history`** - View your MMR progression graph
@@ -188,7 +188,7 @@ Make sure to set these in your hosting platform:
 | `/me` | View your profile | None |
 | `/generate-teams` | Generate teams (manual) | 10 player mentions |
 | `/generate-teams-voice` | Generate teams (voice) | None |
-| `/인원췤` | Player attendance check | None |
+| `/attendance-check` | Player attendance check | None |
 | `/mmr-history` | View MMR graph | None |
 | `/leaderboard` | View rankings | `limit` (optional) |
 
