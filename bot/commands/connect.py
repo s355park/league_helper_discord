@@ -4,6 +4,7 @@ from discord import app_commands
 from discord.ext import commands
 from bot.utils.api_client import APIClient
 import httpx
+from typing import Optional
 
 
 class ConnectCommand(commands.Cog):
@@ -44,7 +45,7 @@ class ConnectCommand(commands.Cog):
         game_name: str,
         tag_line: str,
         tier: str,
-        rank: str = None
+        rank: Optional[str] = None
     ):
         """Connect your Discord account to your League of Legends account."""
         print(f"[Bot] /connect command called by {interaction.user} ({interaction.user.id})", flush=True)

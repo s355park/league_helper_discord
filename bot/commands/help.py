@@ -10,6 +10,25 @@ class HelpCommand(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
+    @commands.command(name="help", aliases=["h"])
+    async def help_prefix(self, ctx: commands.Context):
+        """Prefix command for help - redirects to slash commands."""
+        embed = discord.Embed(
+            title="📚 League Helper Bot",
+            description="This bot uses **slash commands** (/) instead of prefix commands.\n\n"
+                       "Type `/` to see all available commands, or use `/help` for a detailed guide!",
+            color=discord.Color.blue()
+        )
+        embed.add_field(
+            name="Quick Commands",
+            value="`/connect` - Link your League account\n"
+                  "`/generate-teams` - Create balanced teams\n"
+                  "`/help` - Full command guide",
+            inline=False
+        )
+        embed.set_footer(text="All commands use the / prefix")
+        await ctx.send(embed=embed)
+
     @app_commands.command(name="help", description="Show available commands and how to use them")
     async def help(self, interaction: discord.Interaction):
         """Send an embed with available commands organized by category."""
