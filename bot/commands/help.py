@@ -22,7 +22,7 @@ class HelpCommand(commands.Cog):
                     {
                         "name": "connect",
                         "description": "Connect your League of Legends account to your Discord account",
-                        "example": "`/connect game_name:MyUsername tag_line:NA1 tier:Gold`",
+                        "example": "`/connect game_name:MyUsername tag_line:NA1 tier:Gold rank:III`",
                         "admin": False
                     },
                     {

@@ -17,7 +17,8 @@ class ConnectCommand(commands.Cog):
     @app_commands.describe(
         game_name="Your League of Legends username (game name)",
         tag_line="Your League of Legends tag line (e.g., NA1, EUW) - NO hashtag needed!",
-        tier="Your ranked tier"
+        tier="Your ranked tier",
+        rank="Your rank within tier (I, II, III, IV) - Not needed for Master, Grandmaster, or Challenger"
     )
     @app_commands.choices(tier=[
         app_commands.Choice(name="IRON", value="IRON"),
@@ -31,12 +32,19 @@ class ConnectCommand(commands.Cog):
         app_commands.Choice(name="GRANDMASTER", value="GRANDMASTER"),
         app_commands.Choice(name="CHALLENGER", value="CHALLENGER"),
     ])
+    @app_commands.choices(rank=[
+        app_commands.Choice(name="I", value="I"),
+        app_commands.Choice(name="II", value="II"),
+        app_commands.Choice(name="III", value="III"),
+        app_commands.Choice(name="IV", value="IV"),
+    ])
     async def connect(
         self,
         interaction: discord.Interaction,
         game_name: str,
         tag_line: str,
-        tier: str
+        tier: str,
+        rank: str = None
     ):
         """Connect your Discord account to your League of Legends account."""
         print(f"[Bot] /connect command called by {interaction.user} ({interaction.user.id})", flush=True)
@@ -66,11 +74,12 @@ class ConnectCommand(commands.Cog):
                 tag_line,
                 str(interaction.guild_id),
                 highest_tier=tier,
-                highest_rank=None
+                highest_rank=rank
             )
             print(f"[Bot] Got account from API: {account}")
             
             account_tier = account.get("highest_tier")
+            account_rank = account.get("highest_rank")
             
             # Handle None values properly
             if account_tier is None or account_tier == "None":
@@ -78,7 +87,10 @@ class ConnectCommand(commands.Cog):
             elif account_tier == "UNRANKED":
                 tier_display = "Unranked"
             else:
-                tier_display = account_tier
+                if account_rank:
+                    tier_display = f"{account_tier} {account_rank}"
+                else:
+                    tier_display = account_tier
             
             embed = discord.Embed(
                 title="✅ Account Connected Successfully",
