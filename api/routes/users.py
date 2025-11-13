@@ -2,12 +2,11 @@
 from fastapi import APIRouter, HTTPException
 from api.models.schemas import LeagueAccountConnect, LeagueAccountResponse
 from api.services.database import DatabaseService
-from api.services.riot_api import RiotAPIClient
+from api.utils.mmr_calculator import tier_to_value
 from config import Config
 
 router = APIRouter(prefix="/users", tags=["users"])
 db_service = DatabaseService()
-riot_client = RiotAPIClient()
 
 
 @router.post("/connect", response_model=LeagueAccountResponse)
@@ -62,7 +61,7 @@ async def connect_league_account(account: LeagueAccountConnect):
         if custom_mmr == 1000:
             if highest_tier:
                 # Calculate MMR based on tier and rank
-                tier_based_mmr = riot_client.tier_to_value(highest_tier, highest_rank)
+                tier_based_mmr = tier_to_value(highest_tier, highest_rank)
                 logger.info(f"[API] Setting initial MMR from tier: {highest_tier} {highest_rank} = {tier_based_mmr}")
                 
                 # Update user's MMR in database (guild-specific)

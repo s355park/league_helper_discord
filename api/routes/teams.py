@@ -5,13 +5,12 @@ from api.models.schemas import (
     MatchResultRequest, MatchResultResponse
 )
 from api.services.database import DatabaseService
-from api.services.riot_api import RiotAPIClient
+from api.utils.mmr_calculator import tier_to_value
 from api.services.team_balancer import TeamBalancer
 import uuid
 
 router = APIRouter(prefix="/teams", tags=["teams"])
 db_service = DatabaseService()
-riot_client = RiotAPIClient()
 team_balancer = TeamBalancer()
 
 
@@ -41,7 +40,7 @@ async def generate_teams(request: GenerateTeamsRequest):
     # Convert to PlayerInfo objects with tier values and custom MMR
     players = []
     for account in accounts:
-        tier_value = riot_client.tier_to_value(
+        tier_value = tier_to_value(
             account.get("highest_tier"),
             account.get("highest_rank")
         )

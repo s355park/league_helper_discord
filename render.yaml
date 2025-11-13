@@ -8,8 +8,6 @@ services:
     envVars:
       - key: DISCORD_BOT_TOKEN
         sync: false
-      - key: RIOT_API_KEY
-        sync: false
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_KEY
