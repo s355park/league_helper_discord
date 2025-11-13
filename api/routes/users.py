@@ -2,7 +2,7 @@
 from fastapi import APIRouter, HTTPException
 from api.models.schemas import LeagueAccountConnect, LeagueAccountResponse
 from api.services.database import DatabaseService
-from api.services.riot_api import RiotAPIClient, RiotAPIError
+from api.services.riot_api import RiotAPIClient
 from config import Config
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -15,7 +15,7 @@ async def connect_league_account(account: LeagueAccountConnect):
     """
     Connect a Discord user to their League of Legends account.
     
-    Fetches account information from Riot API and stores it in the database.
+    Stores account information in the database. Tier and rank can be provided manually.
     """
     import logging
     import traceback
@@ -24,26 +24,19 @@ async def connect_league_account(account: LeagueAccountConnect):
     try:
         logger.info(f"[API] /connect called for Discord ID: {account.discord_id}, Riot ID: {account.game_name}#{account.tag_line}")
         
-        # Get account info from Riot API
-        logger.info(f"[API] Fetching account info from Riot API...")
-        account_info = await riot_client.get_account_by_riot_id(
-            account.game_name,
-            account.tag_line
-        )
-        puuid = account_info.get("puuid")
-        logger.info(f"[API] Got PUUID: {puuid}")
+        # Use provided tier/rank or None
+        highest_tier = account.highest_tier
+        highest_rank = account.highest_rank
         
-        if not puuid:
-            logger.error(f"[API] ERROR: No PUUID found")
-            raise HTTPException(status_code=404, detail="Account not found")
+        # Normalize tier to uppercase if provided
+        if highest_tier:
+            highest_tier = highest_tier.upper()
         
-        # Get highest tier
-        logger.info(f"[API] Fetching highest tier...")
-        highest_tier, highest_rank = await riot_client.get_highest_tier(
-            account.game_name,
-            account.tag_line
-        )
-        logger.info(f"[API] ⚠️ RETURNED VALUES - Tier: {highest_tier} (type: {type(highest_tier)}), Rank: {highest_rank} (type: {type(highest_rank)})")
+        # Normalize rank to uppercase if provided
+        if highest_rank:
+            highest_rank = highest_rank.upper()
+        
+        logger.info(f"[API] Using tier: {highest_tier}, rank: {highest_rank}")
         
         # Get or create user
         user = await db_service.get_or_create_user(
@@ -51,12 +44,12 @@ async def connect_league_account(account: LeagueAccountConnect):
             account.discord_username  # Store Discord username, not Riot username
         )
         
-        # Upsert league account
+        # Upsert league account (puuid is None since we're not using Riot API)
         league_account = await db_service.upsert_league_account(
             discord_id=account.discord_id,
             game_name=account.game_name,
             tag_line=account.tag_line,
-            puuid=puuid,
+            puuid=None,  # No PUUID since we're not using Riot API
             highest_tier=highest_tier,
             highest_rank=highest_rank
         )
@@ -86,15 +79,12 @@ async def connect_league_account(account: LeagueAccountConnect):
             discord_id=account.discord_id,
             game_name=account.game_name,
             tag_line=account.tag_line,
-            puuid=puuid,
+            puuid=None,  # No PUUID since we're not using Riot API
             highest_tier=highest_tier,
             highest_rank=highest_rank,
             custom_mmr=custom_mmr
         )
         
-    except RiotAPIError as e:
-        logger.error(f"[API] RiotAPIError: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
     except ValueError as e:
         logger.error(f"[API] ValueError: {e}")
         # Handle database constraint violations (PUUID already connected)

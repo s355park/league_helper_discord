@@ -16,13 +16,27 @@ class ConnectCommand(commands.Cog):
     @app_commands.command(name="connect", description="Connect your League of Legends account")
     @app_commands.describe(
         game_name="Your League of Legends username (game name)",
-        tag_line="Your League of Legends tag line (e.g., NA1, EUW) - NO hashtag needed!"
+        tag_line="Your League of Legends tag line (e.g., NA1, EUW) - NO hashtag needed!",
+        tier="Your ranked tier"
     )
+    @app_commands.choices(tier=[
+        app_commands.Choice(name="IRON", value="IRON"),
+        app_commands.Choice(name="BRONZE", value="BRONZE"),
+        app_commands.Choice(name="SILVER", value="SILVER"),
+        app_commands.Choice(name="GOLD", value="GOLD"),
+        app_commands.Choice(name="PLATINUM", value="PLATINUM"),
+        app_commands.Choice(name="EMERALD", value="EMERALD"),
+        app_commands.Choice(name="DIAMOND", value="DIAMOND"),
+        app_commands.Choice(name="MASTER", value="MASTER"),
+        app_commands.Choice(name="GRANDMASTER", value="GRANDMASTER"),
+        app_commands.Choice(name="CHALLENGER", value="CHALLENGER"),
+    ])
     async def connect(
         self,
         interaction: discord.Interaction,
         game_name: str,
-        tag_line: str
+        tag_line: str,
+        tier: str
     ):
         """Connect your Discord account to your League of Legends account."""
         print(f"[Bot] /connect command called by {interaction.user} ({interaction.user.id})", flush=True)
@@ -50,23 +64,21 @@ class ConnectCommand(commands.Cog):
                 interaction.user.display_name,  # Discord display name
                 game_name,
                 tag_line,
-                str(interaction.guild_id)
+                str(interaction.guild_id),
+                highest_tier=tier,
+                highest_rank=None
             )
             print(f"[Bot] Got account from API: {account}")
             
-            tier = account.get("highest_tier")
-            rank = account.get("highest_rank")
+            account_tier = account.get("highest_tier")
             
             # Handle None values properly
-            if tier is None or tier == "None":
+            if account_tier is None or account_tier == "None":
                 tier_display = "Unranked"
-            elif tier == "UNRANKED":
+            elif account_tier == "UNRANKED":
                 tier_display = "Unranked"
             else:
-                if rank:
-                    tier_display = f"{tier} {rank}".strip()
-                else:
-                    tier_display = tier
+                tier_display = account_tier
             
             embed = discord.Embed(
                 title="✅ Account Connected Successfully",
@@ -93,11 +105,7 @@ class ConnectCommand(commands.Cog):
             import traceback
             traceback.print_exc()
             
-            if "404" in error_msg or "not found" in error_msg.lower():
-                error_msg = "Account not found. Please check your Riot ID and try again."
-            elif "403" in error_msg or "api key" in error_msg.lower():
-                error_msg = "API configuration error. Please contact the bot administrator."
-            elif "409" in error_msg or "already connected" in error_msg.lower():
+            if "409" in error_msg or "already connected" in error_msg.lower():
                 error_msg = "This League account is already connected to another Discord user. Each League account can only be connected to one Discord account."
             elif "duplicate" in error_msg.lower() or "unique constraint" in error_msg.lower():
                 error_msg = "This account is already connected. Use `/me` to view your current connection."

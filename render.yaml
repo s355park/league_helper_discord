@@ -2,6 +2,7 @@ services:
   - type: web
     name: league-discord-bot
     env: python
+    branch: non_riot  # Change this to your desired branch (e.g., develop, staging, feature/xyz)
     buildCommand: pip install -r requirements.txt
     startCommand: python3 start.py
     envVars:
