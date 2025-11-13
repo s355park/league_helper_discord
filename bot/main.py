@@ -28,7 +28,8 @@ class LeagueTeamBot(commands.Bot):
         super().__init__(
             command_prefix="!",
             intents=intents,
-            description="League of Legends Team Generator Bot"
+            description="League of Legends Team Generator Bot",
+            help_command=None  # Disable default help command
         )
     
     async def setup_hook(self):
