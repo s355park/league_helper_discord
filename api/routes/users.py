@@ -2,7 +2,7 @@
 from fastapi import APIRouter, HTTPException
 from api.models.schemas import LeagueAccountConnect, LeagueAccountResponse
 from api.services.database import DatabaseService
-from api.utils.mmr_calculator import tier_to_value
+from api.services.tier_utils import tier_to_value
 from config import Config
 
 router = APIRouter(prefix="/users", tags=["users"])

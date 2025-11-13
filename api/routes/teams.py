@@ -5,7 +5,7 @@ from api.models.schemas import (
     MatchResultRequest, MatchResultResponse
 )
 from api.services.database import DatabaseService
-from api.utils.mmr_calculator import tier_to_value
+from api.services.tier_utils import tier_to_value
 from api.services.team_balancer import TeamBalancer
 import uuid
 
