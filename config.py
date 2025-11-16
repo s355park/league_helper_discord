@@ -31,7 +31,6 @@ class Config:
         """Validate that all required configuration is present."""
         required = [
             "DISCORD_BOT_TOKEN",
-            "RIOT_API_KEY",
             "SUPABASE_URL",
             "SUPABASE_KEY",
         ]

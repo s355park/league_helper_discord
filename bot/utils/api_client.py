@@ -1,6 +1,6 @@
 """FastAPI client wrapper for Discord bot."""
 import httpx
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from config import Config
 
 
@@ -16,7 +16,9 @@ class APIClient:
         discord_username: str,
         game_name: str,
         tag_line: str,
-        guild_id: str
+        guild_id: str,
+        highest_tier: Optional[str] = None,
+        highest_rank: Optional[str] = None
     ) -> Dict[str, Any]:
         """Connect a Discord user to their League account."""
         url = f"{self.base_url}/users/connect"
@@ -27,6 +29,10 @@ class APIClient:
             "tag_line": tag_line,
             "guild_id": guild_id
         }
+        if highest_tier:
+            data["highest_tier"] = highest_tier
+        if highest_rank:
+            data["highest_rank"] = highest_rank
         
         print(f"[Bot] Making request to {url}", flush=True)
         print(f"[Bot] Data: {data}", flush=True)

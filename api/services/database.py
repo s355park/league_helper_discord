@@ -56,17 +56,18 @@ class DatabaseService:
         discord_id: str,
         game_name: str,
         tag_line: str,
-        puuid: str,
+        puuid: Optional[str] = None,
         highest_tier: Optional[str] = None,
         highest_rank: Optional[str] = None
     ) -> Dict[str, Any]:
         """Create or update a League account connection."""
-        # Check if this PUUID is already connected to a different Discord account
-        existing_puuid = self.client.table("league_accounts").select("discord_id").eq("puuid", puuid).execute()
-        if existing_puuid.data:
-            existing_discord_id = existing_puuid.data[0]["discord_id"]
-            if existing_discord_id != discord_id:
-                raise ValueError(f"This League account is already connected to a different Discord user")
+        # Check if this PUUID is already connected to a different Discord account (only if PUUID is provided)
+        if puuid:
+            existing_puuid = self.client.table("league_accounts").select("discord_id").eq("puuid", puuid).execute()
+            if existing_puuid.data:
+                existing_discord_id = existing_puuid.data[0]["discord_id"]
+                if existing_discord_id != discord_id:
+                    raise ValueError(f"This League account is already connected to a different Discord user")
         
         # Check if this Discord account already has a League account
         existing_account = self.client.table("league_accounts").select("*").eq("discord_id", discord_id).execute()

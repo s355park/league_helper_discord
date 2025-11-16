@@ -10,76 +10,124 @@ class HelpCommand(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
+    @commands.command(name="help", aliases=["h"])
+    async def help_prefix(self, ctx: commands.Context):
+        """Prefix command for help - redirects to slash commands."""
+        embed = discord.Embed(
+            title="📚 League Helper Bot",
+            description="This bot uses **slash commands** (/) instead of prefix commands.\n\n"
+                       "Type `/` to see all available commands, or use `/help` for a detailed guide!",
+            color=discord.Color.blue()
+        )
+        embed.add_field(
+            name="Quick Commands",
+            value="`/connect` - Link your League account\n"
+                  "`/generate-teams` - Create balanced teams\n"
+                  "`/help` - Full command guide",
+            inline=False
+        )
+        embed.set_footer(text="All commands use the / prefix")
+        await ctx.send(embed=embed)
+
     @app_commands.command(name="help", description="Show available commands and how to use them")
     async def help(self, interaction: discord.Interaction):
-        """Send an embed with available commands."""
+        """Send an embed with available commands organized by category."""
         await interaction.response.defer(thinking=True, ephemeral=True)
 
-        commands_list = []
-        for cmd in self.bot.tree.get_commands():
-            # Skip context menu commands; focus on chat input commands
-            if not isinstance(cmd, app_commands.Command):
-                continue
-            # Skip hidden/internal commands if any
-            if getattr(cmd, "hidden", False):
-                continue
+        # Define command categories with descriptions and examples
+        command_categories = {
+            "Account Management": {
+                "commands": [
+                    {
+                        "name": "connect",
+                        "description": "Connect your League of Legends account to your Discord account",
+                        "example": "`/connect game_name:MyUsername tag_line:NA1 tier:Gold rank:III`",
+                        "admin": False
+                    },
+                    {
+                        "name": "me",
+                        "description": "View your connected League account and current MMR",
+                        "example": "`/me`",
+                        "admin": False
+                    }
+                ]
+            },
+            "Team Generation": {
+                "commands": [
+                    {
+                        "name": "generate-teams",
+                        "description": "Generate balanced teams from 10 players (select 10 Discord members)",
+                        "example": "`/generate-teams player1:@Player1 player2:@Player2 ...`",
+                        "admin": False
+                    },
+                    {
+                        "name": "attendance-check",
+                        "description": "Check who's ready to play (attendance check with buttons)",
+                        "example": "`/attendance-check`",
+                        "admin": False
+                    }
+                ]
+            },
+            "Statistics": {
+                "commands": [
+                    {
+                        "name": "leaderboard",
+                        "description": "View MMR leaderboard (top players by MMR)",
+                        "example": "`/leaderboard limit:20`",
+                        "admin": False
+                    },
+                    {
+                        "name": "mmr-history",
+                        "description": "View your MMR progression graph over time",
+                        "example": "`/mmr-history`",
+                        "admin": False
+                    }
+                ]
+            },
+            "Administration": {
+                "commands": [
+                    {
+                        "name": "modify-mmr",
+                        "description": "Modify a player's MMR (administrator only)",
+                        "example": "`/modify-mmr player:@Player new_mmr:1500`",
+                        "admin": True
+                    },
+                    {
+                        "name": "guild-id",
+                        "description": "Get the current server's (guild) ID",
+                        "example": "`/guild-id`",
+                        "admin": False
+                    }
+                ]
+            }
+        }
 
-            is_admin_only = False
-            # Detect admin-only via default_permissions or checks metadata
-            try:
-                default_perms = getattr(cmd, "default_permissions", None)
-                if default_perms and getattr(default_perms, "administrator", False):
-                    is_admin_only = True
-            except Exception:
-                pass
-            # Fallback: mark known admin commands
-            if cmd.name in {"modify-mmr"}:
-                is_admin_only = True
-
-            marker = " (admin)" if is_admin_only else ""
-            desc = (cmd.description or "").strip()
-            commands_list.append((cmd.name, desc, marker))
-
-        # Sort alphabetically
-        commands_list.sort(key=lambda x: x[0])
-
+        # Build the embed
         embed = discord.Embed(
-            title="Help",
-            description="Slash commands available in this bot.",
-            color=discord.Color.blurple(),
+            title="📚 League Helper Bot - Command Guide",
+            description="Here are all available commands organized by category:",
+            color=discord.Color.blue()
         )
 
-        # Build lines compactly
-        lines = []
-        for name, desc, marker in commands_list:
-            display_desc = desc if desc else "No description provided."
-            lines.append(f"/{name}{marker} — {display_desc}")
+        # Add each category as a field
+        for category_name, category_data in command_categories.items():
+            field_value = ""
+            for cmd in category_data["commands"]:
+                admin_marker = " 🔒" if cmd["admin"] else ""
+                field_value += f"**`/{cmd['name']}`**{admin_marker}\n"
+                field_value += f"• {cmd['description']}\n"
+                field_value += f"• Example: {cmd['example']}\n\n"
+            
+            embed.add_field(
+                name=f"📋 {category_name}",
+                value=field_value.strip(),
+                inline=False
+            )
 
-        # Discord embed field length constraints; chunk if necessary
-        chunk = []
-        chunk_len = 0
-        max_field_len = 1024
-        fields = []
-        for line in lines:
-            line_len = len(line) + 1
-            if chunk_len + line_len > max_field_len:
-                fields.append("\n".join(chunk))
-                chunk = [line]
-                chunk_len = line_len
-            else:
-                chunk.append(line)
-                chunk_len += line_len
-        if chunk:
-            fields.append("\n".join(chunk))
-
-        if not fields:
-            fields = ["No commands found."]
-
-        # Add fields to embed
-        for i, field_text in enumerate(fields, start=1):
-            embed.add_field(name=f"Commands {i}", value=field_text, inline=False)
-
-        embed.set_footer(text="Admin-only commands are marked with (admin)")
+        # Add footer with additional info
+        embed.set_footer(
+            text="🔒 = Admin only | Use /help to see this guide again | All commands use slash commands (/)"
+        )
 
         await interaction.followup.send(embed=embed, ephemeral=True)
 

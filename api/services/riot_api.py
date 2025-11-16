@@ -41,7 +41,7 @@ class RiotAPIClient:
         self.base_url = Config.RIOT_API_BASE_URL
         self.headers = {
             "X-Riot-Token": self.api_key
-        }
+        } if self.api_key else {}
     
     async def get_account_by_riot_id(self, game_name: str, tag_line: str) -> Dict[str, Any]:
         """
