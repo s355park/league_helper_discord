@@ -218,37 +218,23 @@ async def correct_match_result(request: CorrectMatchResultRequest):
     # Correct: Team Y won, so Team X should get -change, Team Y should get +change
     # Net: Team X loses 2*change, Team Y gains 2*change
     
-    mmr_calculator = MMRCalculator()
+    # Use the stored mmr_change from the match record (this is the absolute value)
+    stored_mmr_change = original_match["mmr_change"]
     
-    # Calculate what the original change was
-    original_team1_avg = original_match["team1_avg_mmr"]
-    original_team2_avg = original_match["team2_avg_mmr"]
+    # Determine which team originally won
     original_winning_team = original_match["winning_team"]
     
-    original_team1_score = 1.0 if original_winning_team == 1 else 0.0
-    original_team1_change = mmr_calculator.calculate_mmr_change(
-        original_team1_avg, original_team2_avg, original_team1_score
-    )
-    original_team2_change = -original_team1_change
-    
-    # Calculate what the correct change should be
-    team1_mmrs = [player_mmrs_before_match[discord_id] for discord_id in team1_ids]
-    team2_mmrs = [player_mmrs_before_match[discord_id] for discord_id in team2_ids]
-    
-    team1_avg = sum(team1_mmrs) / len(team1_mmrs)
-    team2_avg = sum(team2_mmrs) / len(team2_mmrs)
-    
-    team1_actual_score = 1.0 if request.winning_team == 1 else 0.0
-    correct_team1_change = mmr_calculator.calculate_mmr_change(
-        team1_avg, team2_avg, team1_actual_score
-    )
-    correct_team2_change = -correct_team1_change
-    
-    # Calculate net change: correct_change - original_change
-    # For Team 1: if originally got +16 and should get -16, net is -32
-    # For Team 2: if originally got -16 and should get +16, net is +32
-    net_team1_change = correct_team1_change - original_team1_change
-    net_team2_change = correct_team2_change - original_team2_change
+    # Calculate net change: if originally Team 1 won (+change) and we correct to Team 2 won (-change)
+    # Net for Team 1: -change - change = -2*change
+    # Net for Team 2: +change - (-change) = +2*change
+    if original_winning_team == 1:
+        # Originally Team 1 won, correcting to Team 2
+        net_team1_change = -2 * stored_mmr_change
+        net_team2_change = 2 * stored_mmr_change
+    else:
+        # Originally Team 2 won, correcting to Team 1
+        net_team1_change = 2 * stored_mmr_change
+        net_team2_change = -2 * stored_mmr_change
     
     # Get current MMRs and apply the net change directly
     accounts = await db_service.get_players_by_discord_ids(all_discord_ids, request.guild_id)
@@ -269,6 +255,19 @@ async def correct_match_result(request: CorrectMatchResultRequest):
         mmr_changes[discord_id] = net_team2_change
     
     # Step 2: Update the match record
+    # Calculate averages for the match record update
+    team1_mmrs = [player_mmrs_before_match[discord_id] for discord_id in team1_ids]
+    team2_mmrs = [player_mmrs_before_match[discord_id] for discord_id in team2_ids]
+    team1_avg = sum(team1_mmrs) / len(team1_mmrs)
+    team2_avg = sum(team2_mmrs) / len(team2_mmrs)
+    
+    # Calculate the correct MMR change for the match record
+    mmr_calculator = MMRCalculator()
+    team1_actual_score = 1.0 if request.winning_team == 1 else 0.0
+    correct_team1_change = mmr_calculator.calculate_mmr_change(
+        team1_avg, team2_avg, team1_actual_score
+    )
+    
     await db_service.update_match_result(
         match_id=request.match_id,
         winning_team=request.winning_team,
