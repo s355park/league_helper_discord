@@ -37,60 +37,85 @@ class MMRAccuracyCommand(commands.Cog):
                 data = response.json()
             
             matches_analyzed = data.get("matches_analyzed", 0)
-            overall_win_rate = data.get("overall_win_rate", 0.0)
-            data_points = data.get("data_points", [])
             
             if matches_analyzed == 0:
                 embed = discord.Embed(
-                    title="📊 MMR Accuracy",
-                    description="No matches found to analyze!\n\nPlay some games and record results to see MMR accuracy.",
+                    title="📊 MMR Analysis",
+                    description="No matches found to analyze!\n\nPlay some games and record results to see MMR analysis.",
                     color=discord.Color.orange()
                 )
                 await interaction.followup.send(embed=embed, ephemeral=True)
                 return
             
-            # Prepare data for graph
-            match_numbers = [dp["match_number"] for dp in data_points]
-            win_rates = [dp["cumulative_win_rate"] for dp in data_points]
+            stabilization_data = data.get("stabilization_data", [])
+            calibration_data = data.get("calibration_data", [])
+            avg_change_first = data.get("avg_mmr_change_first_half", 0)
+            avg_change_second = data.get("avg_mmr_change_second_half", 0)
+            overall_accuracy = data.get("overall_accuracy", 0.0)
+            recent_accuracy = data.get("recent_accuracy", 0.0)
+            recent_matches_count = data.get("recent_matches_count", 0)
             
-            # Create graph
-            fig, ax = plt.subplots(figsize=(12, 6))
+            # Create a figure with two subplots
+            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
             
-            # Plot the win rate line
-            ax.plot(match_numbers, win_rates, linewidth=2, color='#5865F2', marker='o', markersize=4, alpha=0.7)
+            # Subplot 1: MMR Change Magnitude Over Time (Stabilization)
+            if stabilization_data:
+                match_numbers = [dp["match_number"] for dp in stabilization_data]
+                mmr_changes = [dp["mmr_change_magnitude"] for dp in stabilization_data]
+                
+                ax1.plot(match_numbers, mmr_changes, linewidth=2, color='#5865F2', marker='o', markersize=3, alpha=0.6, label='MMR Change')
+                
+                # Add average lines
+                if len(match_numbers) > 1:
+                    mid_point = len(match_numbers) // 2
+                    ax1.axvline(x=mid_point, color='#ED4245', linestyle='--', linewidth=1, alpha=0.5)
+                    ax1.axhline(y=avg_change_first, color='#57F287', linestyle='--', linewidth=1.5, alpha=0.7, label=f'First Half Avg: {avg_change_first:.1f}')
+                    ax1.axhline(y=avg_change_second, color='#FEE75C', linestyle='--', linewidth=1.5, alpha=0.7, label=f'Second Half Avg: {avg_change_second:.1f}')
+                
+                ax1.set_xlabel('Match #', fontsize=11, color='white')
+                ax1.set_ylabel('MMR Change Magnitude', fontsize=11, color='white')
+                ax1.set_title('MMR Stabilization Over Time', fontsize=13, fontweight='bold', color='white', pad=15)
+                ax1.grid(True, alpha=0.3, linestyle='--')
+                ax1.legend(loc='best', facecolor='#2F3136', edgecolor='white', labelcolor='white', fontsize=9)
             
-            # Add a horizontal line at 50% (expected if MMR is perfectly balanced)
-            ax.axhline(y=50, color='#ED4245', linestyle='--', linewidth=1.5, alpha=0.5, label='50% (Perfect Balance)')
+            # Subplot 2: Calibration (Expected vs Actual Win Rate)
+            if calibration_data:
+                ranges = [cd["mmr_difference_range"] for cd in calibration_data]
+                expected = [cd["expected_win_rate"] for cd in calibration_data]
+                actual = [cd["actual_win_rate"] for cd in calibration_data]
+                matches_count = [cd["matches"] for cd in calibration_data]
+                
+                x_pos = range(len(ranges))
+                width = 0.35
+                
+                bars1 = ax2.bar([x - width/2 for x in x_pos], expected, width, label='Expected', color='#57F287', alpha=0.7)
+                bars2 = ax2.bar([x + width/2 for x in x_pos], actual, width, label='Actual', color='#5865F2', alpha=0.7)
+                
+                # Add match count labels on bars
+                for i, (bar1, bar2, count) in enumerate(zip(bars1, bars2, matches_count)):
+                    height1 = bar1.get_height()
+                    height2 = bar2.get_height()
+                    ax2.text(bar1.get_x() + bar1.get_width()/2., height1 + 1, f'n={count}', 
+                            ha='center', va='bottom', color='white', fontsize=8)
+                
+                ax2.set_xlabel('MMR Difference Range', fontsize=11, color='white')
+                ax2.set_ylabel('Win Rate (%)', fontsize=11, color='white')
+                ax2.set_title('MMR Calibration: Expected vs Actual', fontsize=13, fontweight='bold', color='white', pad=15)
+                ax2.set_xticks(x_pos)
+                ax2.set_xticklabels(ranges, color='white')
+                ax2.set_ylim(0, 100)
+                ax2.grid(True, alpha=0.3, linestyle='--', axis='y')
+                ax2.legend(loc='best', facecolor='#2F3136', edgecolor='white', labelcolor='white')
             
-            # Add a horizontal line at overall win rate
-            ax.axhline(y=overall_win_rate, color='#57F287', linestyle='--', linewidth=1.5, alpha=0.5, label=f'Overall: {overall_win_rate:.1f}%')
-            
-            # Formatting
-            ax.set_xlabel('Match #', fontsize=11, color='white')
-            ax.set_ylabel('Win Rate (%)', fontsize=11, color='white')
-            ax.set_title('MMR Accuracy: Higher MMR Team Win Rate Over Time', 
-                        fontsize=14, fontweight='bold', color='white', pad=20)
-            ax.set_ylim(0, 100)
-            ax.grid(True, alpha=0.3, linestyle='--')
-            
-            # Set dark theme
+            # Set dark theme for both subplots
             fig.patch.set_facecolor('#2F3136')
-            ax.set_facecolor('#36393F')
-            ax.tick_params(colors='white')
-            ax.spines['bottom'].set_color('white')
-            ax.spines['top'].set_color('white')
-            ax.spines['right'].set_color('white')
-            ax.spines['left'].set_color('white')
-            
-            # Add legend
-            ax.legend(loc='best', facecolor='#2F3136', edgecolor='white', labelcolor='white')
-            
-            # Add statistics text
-            stats_text = f'Matches Analyzed: {matches_analyzed}\nOverall Win Rate: {overall_win_rate:.1f}%'
-            ax.text(0.02, 0.98, stats_text, 
-                   transform=ax.transAxes, fontsize=10, 
-                   verticalalignment='top', color='white',
-                   bbox=dict(boxstyle='round', facecolor='#2F3136', alpha=0.8))
+            for ax in [ax1, ax2]:
+                ax.set_facecolor('#36393F')
+                ax.tick_params(colors='white')
+                ax.spines['bottom'].set_color('white')
+                ax.spines['top'].set_color('white')
+                ax.spines['right'].set_color('white')
+                ax.spines['left'].set_color('white')
             
             plt.tight_layout()
             
@@ -104,24 +129,70 @@ class MMRAccuracyCommand(commands.Cog):
                 plt.close()
                 raise
             
-            # Create embed
+            # Create embed with comprehensive analysis
             embed = discord.Embed(
-                title="📊 MMR Accuracy Analysis",
-                description=f"Analyzed **{matches_analyzed}** matches\n\n**Overall Win Rate:** {overall_win_rate:.1f}%\n*Percentage of matches where the team with higher average MMR won*",
+                title="📊 MMR Stability & Accuracy Analysis",
+                description=f"Analyzed **{matches_analyzed}** matches in this server",
                 color=discord.Color.blue()
             )
             
-            # Add interpretation
-            if overall_win_rate > 60:
-                interpretation = "✅ MMR is working well! Higher MMR teams win significantly more often."
-            elif overall_win_rate > 50:
-                interpretation = "✅ MMR is reasonably accurate. Higher MMR teams win more often than not."
-            elif overall_win_rate > 40:
-                interpretation = "⚠️ MMR accuracy is moderate. Consider reviewing the MMR calculation."
+            # Stabilization analysis
+            stabilization_status = ""
+            if avg_change_second < avg_change_first * 0.8:
+                stabilization_status = "✅ **MMR is stabilizing!** Average change decreased by {:.1f}%".format(
+                    (1 - avg_change_second/avg_change_first) * 100 if avg_change_first > 0 else 0
+                )
+            elif avg_change_second > avg_change_first * 1.2:
+                stabilization_status = "⚠️ **MMR changes are increasing.** Average change increased by {:.1f}%".format(
+                    ((avg_change_second/avg_change_first) - 1) * 100 if avg_change_first > 0 else 0
+                )
             else:
-                interpretation = "❌ MMR accuracy is low. The MMR system may need adjustment."
+                stabilization_status = "➡️ **MMR changes are stable.** Average change: {:.1f} → {:.1f}".format(
+                    avg_change_first, avg_change_second
+                )
             
-            embed.add_field(name="Interpretation", value=interpretation, inline=False)
+            embed.add_field(
+                name="📉 Stabilization",
+                value=f"{stabilization_status}\n*Lower MMR changes over time indicate stabilization*",
+                inline=False
+            )
+            
+            # Accuracy analysis
+            accuracy_status = ""
+            if overall_accuracy > 60:
+                accuracy_status = "✅ **Excellent accuracy!** MMR strongly predicts winners."
+            elif overall_accuracy > 50:
+                accuracy_status = "✅ **Good accuracy.** MMR reasonably predicts winners."
+            elif overall_accuracy > 40:
+                accuracy_status = "⚠️ **Moderate accuracy.** MMR prediction is weak."
+            else:
+                accuracy_status = "❌ **Low accuracy.** MMR may not reflect skill well."
+            
+            embed.add_field(
+                name="🎯 Prediction Accuracy",
+                value=f"{accuracy_status}\n**Overall:** {overall_accuracy:.1f}%\n**Recent ({recent_matches_count} matches):** {recent_accuracy:.1f}%",
+                inline=False
+            )
+            
+            # Calibration summary
+            if calibration_data:
+                calibration_text = ""
+                for cd in calibration_data:
+                    diff = cd["difference"]
+                    if abs(diff) < 5:
+                        status = "✅"
+                    elif abs(diff) < 10:
+                        status = "⚠️"
+                    else:
+                        status = "❌"
+                    calibration_text += f"{status} {cd['mmr_difference_range']}: {cd['actual_win_rate']:.1f}% (expected {cd['expected_win_rate']:.1f}%)\n"
+                
+                embed.add_field(
+                    name="⚖️ Calibration by MMR Difference",
+                    value=calibration_text or "Not enough data",
+                    inline=False
+                )
+            
             embed.set_image(url="attachment://mmr_accuracy.png")
             embed.set_footer(text=f"Based on {matches_analyzed} matches in this server")
             

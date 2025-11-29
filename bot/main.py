@@ -14,7 +14,7 @@ if project_root not in sys.path:
 from config import Config
 
 # Import commands
-from bot.commands import connect, teams, attendance, mmr_history, leaderboard, modify_mmr, help, correct_match, mmr_accuracy
+from bot.commands import connect, teams, attendance, mmr_history, leaderboard, modify_mmr, help, correct_match, mmr_accuracy, sync_commands
 
 
 class LeagueTeamBot(commands.Bot):
@@ -43,6 +43,7 @@ class LeagueTeamBot(commands.Bot):
         await self.add_cog(modify_mmr.ModifyMMRCommand(self))
         await self.add_cog(correct_match.CorrectMatchCommand(self))
         await self.add_cog(mmr_accuracy.MMRAccuracyCommand(self))
+        await self.add_cog(sync_commands.SyncCommandsCommand(self))
         await self.add_cog(help.HelpCommand(self))
         
         # List all registered commands before syncing
@@ -115,11 +116,21 @@ class LeagueTeamBot(commands.Bot):
             try:
                 # Clear any guild-specific commands first to avoid duplicates
                 self.tree.clear_commands(guild=guild)
+                # Wait a bit to ensure Discord processes the clear
+                await asyncio.sleep(0.5)
                 # Sync global commands to this guild (forces Discord to update)
                 synced = await self.tree.sync(guild=guild)
                 print(f"   ✅ Synced {len(synced)} command(s) to '{guild.name}' (ID: {guild.id})")
+                # List the synced commands for verification
+                for cmd in synced:
+                    print(f"      - {cmd.name} (ID: {cmd.id})")
+            except discord.errors.HTTPException as e:
+                print(f"   ⚠️ HTTP error syncing to '{guild.name}' (ID: {guild.id}): {e}")
+                print(f"      Status: {e.status}, Code: {e.code}, Text: {e.text}")
             except Exception as e:
-                print(f"   ⚠️ Could not sync commands to '{guild.name}': {e}")
+                print(f"   ⚠️ Could not sync commands to '{guild.name}' (ID: {guild.id}): {e}")
+                import traceback
+                traceback.print_exc()
     
     async def on_command_error(self, ctx, error):
         """Handle command errors."""
