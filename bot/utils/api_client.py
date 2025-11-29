@@ -145,4 +145,30 @@ class APIClient:
             if e.response.status_code == 404:
                 raise Exception("Account not found")
             raise Exception(f"API error: {e.response.status_code} - {e.response.text}")
+    
+    async def correct_match_result(
+        self,
+        match_id: str,
+        winning_team: int,
+        guild_id: str
+    ) -> Dict[str, Any]:
+        """Correct a match result that was recorded incorrectly."""
+        url = f"{self.base_url}/teams/correct-match-result"
+        data = {
+            "match_id": match_id,
+            "winning_team": winning_team,
+            "guild_id": guild_id
+        }
+        
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(url, json=data, timeout=30.0)
+                response.raise_for_status()
+                return response.json()
+        except httpx.ConnectError as e:
+            raise ConnectionError(f"Failed to connect to API at {url}. Error: {str(e)}\n\nIs the FastAPI server running? Try: python -m uvicorn api.main:app --reload")
+        except httpx.TimeoutException:
+            raise ConnectionError(f"Request to API timed out. The server may be overloaded.")
+        except httpx.HTTPStatusError as e:
+            raise Exception(f"API error: {e.response.status_code} - {e.response.text}")
 

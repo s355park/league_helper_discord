@@ -2,7 +2,7 @@
 from fastapi import APIRouter, HTTPException
 from api.models.schemas import (
     GenerateTeamsRequest, GenerateTeamsResponse, PlayerInfo, Team,
-    MatchResultRequest, MatchResultResponse
+    MatchResultRequest, MatchResultResponse, CorrectMatchResultRequest
 )
 from api.services.database import DatabaseService
 from api.services.tier_utils import tier_to_value
@@ -148,6 +148,138 @@ async def record_match_result(result: MatchResultRequest):
     return MatchResultResponse(
         match_id=result.match_id,
         winning_team=result.winning_team,
+        mmr_changes=mmr_changes,
+        message=message
+    )
+
+
+@router.post("/correct-match-result", response_model=MatchResultResponse)
+async def correct_match_result(request: CorrectMatchResultRequest):
+    """
+    Correct a match result that was recorded incorrectly.
+    
+    This will:
+    1. Revert MMR changes from the original (incorrect) result
+    2. Apply the correct MMR changes based on the new winning team
+    3. Update the match record in the database
+    
+    Args:
+        request: Match correction request with match_id and correct winning_team
+        
+    Returns:
+        Match result response with corrected MMR changes
+    """
+    from api.services.mmr_calculator import MMRCalculator
+    
+    if request.winning_team not in [1, 2]:
+        raise HTTPException(
+            status_code=400,
+            detail="winning_team must be 1 or 2"
+        )
+    
+    # Get the original match
+    original_match = await db_service.get_match_by_id(request.match_id, request.guild_id)
+    
+    if not original_match:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Match with ID {request.match_id} not found for this guild"
+        )
+    
+    # Check if the winning team is actually different
+    if original_match["winning_team"] == request.winning_team:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Match already recorded with Team {request.winning_team} winning. No correction needed."
+        )
+    
+    # Get player MMRs from before the match (stored in player_mmrs)
+    player_mmrs_before_match = original_match.get("player_mmrs", {})
+    
+    if not player_mmrs_before_match:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot correct match: original player MMRs not found. This match may be too old to correct."
+        )
+    
+    team1_ids = original_match["team1_player_ids"]
+    team2_ids = original_match["team2_player_ids"]
+    all_discord_ids = team1_ids + team2_ids
+    
+    # Verify we have MMRs for all players
+    if not all(discord_id in player_mmrs_before_match for discord_id in all_discord_ids):
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot correct match: missing MMR data for some players"
+        )
+    
+    # Step 1: Revert MMRs to what they were before the match
+    # Get current MMRs to calculate what needs to be reverted
+    accounts = await db_service.get_players_by_discord_ids(all_discord_ids, request.guild_id)
+    current_mmr_map = {acc["discord_id"]: acc.get("custom_mmr", 1000) for acc in accounts}
+    
+    # Calculate the original MMR change that was applied
+    original_team1_avg = original_match["team1_avg_mmr"]
+    original_team2_avg = original_match["team2_avg_mmr"]
+    original_winning_team = original_match["winning_team"]
+    
+    mmr_calculator = MMRCalculator()
+    original_team1_score = 1.0 if original_winning_team == 1 else 0.0
+    original_team1_change = mmr_calculator.calculate_mmr_change(
+        original_team1_avg, original_team2_avg, original_team1_score
+    )
+    original_team2_change = -original_team1_change
+    
+    # Revert MMRs: subtract the original change
+    for discord_id in team1_ids:
+        original_mmr = player_mmrs_before_match[discord_id]
+        await db_service.update_player_mmr(discord_id, original_mmr, request.guild_id)
+    
+    for discord_id in team2_ids:
+        original_mmr = player_mmrs_before_match[discord_id]
+        await db_service.update_player_mmr(discord_id, original_mmr, request.guild_id)
+    
+    # Step 2: Calculate and apply the correct MMR changes
+    team1_mmrs = [player_mmrs_before_match[discord_id] for discord_id in team1_ids]
+    team2_mmrs = [player_mmrs_before_match[discord_id] for discord_id in team2_ids]
+    
+    team1_avg = sum(team1_mmrs) / len(team1_mmrs)
+    team2_avg = sum(team2_mmrs) / len(team2_mmrs)
+    
+    team1_actual_score = 1.0 if request.winning_team == 1 else 0.0
+    team1_change = mmr_calculator.calculate_mmr_change(
+        team1_avg, team2_avg, team1_actual_score
+    )
+    team2_change = -team1_change
+    
+    # Apply the correct MMR changes
+    mmr_changes = {}
+    for discord_id in team1_ids:
+        new_mmr = player_mmrs_before_match[discord_id] + team1_change
+        await db_service.update_player_mmr(discord_id, new_mmr, request.guild_id)
+        mmr_changes[discord_id] = team1_change
+    
+    for discord_id in team2_ids:
+        new_mmr = player_mmrs_before_match[discord_id] + team2_change
+        await db_service.update_player_mmr(discord_id, new_mmr, request.guild_id)
+        mmr_changes[discord_id] = team2_change
+    
+    # Step 3: Update the match record
+    await db_service.update_match_result(
+        match_id=request.match_id,
+        winning_team=request.winning_team,
+        team1_avg_mmr=int(team1_avg),
+        team2_avg_mmr=int(team2_avg),
+        mmr_change=abs(team1_change),
+        guild_id=request.guild_id
+    )
+    
+    winning_team_name = f"Team {request.winning_team}"
+    message = f"Match result corrected! {winning_team_name} won. MMR updated: {'+' if team1_change > 0 else ''}{team1_change} for Team 1, {'+' if team2_change > 0 else ''}{team2_change} for Team 2"
+    
+    return MatchResultResponse(
+        match_id=request.match_id,
+        winning_team=request.winning_team,
         mmr_changes=mmr_changes,
         message=message
     )

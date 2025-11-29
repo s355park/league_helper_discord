@@ -72,3 +72,9 @@ class MatchResultResponse(BaseModel):
     mmr_changes: dict  # Map of discord_id -> mmr_change
     message: str
 
+
+class CorrectMatchResultRequest(BaseModel):
+    """Request schema for correcting match results."""
+    match_id: str
+    winning_team: int  # 1 or 2
+    guild_id: str  # Discord server (guild) ID

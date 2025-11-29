@@ -239,6 +239,11 @@ class TeamsCommand(commands.Cog):
                 value=f"MMR difference: {tier_difference}",
                 inline=False
             )
+            embed.add_field(
+                name="Match ID",
+                value=f"`{match_id}`\n*Use this ID with `/correct-match-result` if you need to fix the result*",
+                inline=False
+            )
             embed.set_footer(text="Teams are balanced based on custom MMR! Click a button after the match to update MMR.")
             
             # Create view with buttons
@@ -346,6 +351,11 @@ class TeamsCommand(commands.Cog):
             embed.add_field(
                 name="Balance",
                 value=f"MMR difference: {tier_difference}",
+                inline=False
+            )
+            embed.add_field(
+                name="Match ID",
+                value=f"`{match_id}`\n*Use this ID with `/correct-match-result` if you need to fix the result*",
                 inline=False
             )
             embed.set_footer(text="Teams are balanced based on custom MMR! Click a button after the match to update MMR.")

@@ -175,6 +175,34 @@ class DatabaseService:
         
         self.client.table("matches").insert(data).execute()
     
+    async def get_match_by_id(self, match_id: str, guild_id: str) -> Optional[Dict[str, Any]]:
+        """Get a match by match_id for a specific guild."""
+        result = self.client.table("matches").select(
+            "*"
+        ).eq("match_id", match_id).eq("guild_id", guild_id).execute()
+        
+        if not result.data:
+            return None
+        
+        return result.data[0]
+    
+    async def update_match_result(
+        self,
+        match_id: str,
+        winning_team: int,
+        team1_avg_mmr: int,
+        team2_avg_mmr: int,
+        mmr_change: int,
+        guild_id: str
+    ) -> None:
+        """Update a match result in the database."""
+        self.client.table("matches").update({
+            "winning_team": winning_team,
+            "team1_avg_mmr": team1_avg_mmr,
+            "team2_avg_mmr": team2_avg_mmr,
+            "mmr_change": mmr_change
+        }).eq("match_id", match_id).eq("guild_id", guild_id).execute()
+    
     async def get_player_match_history(self, discord_id: str, guild_id: str, limit: int = 50) -> list[Dict[str, Any]]:
         """Get match history for a player with their MMR at match time in a specific guild."""
         # Get matches where player participated in this guild
