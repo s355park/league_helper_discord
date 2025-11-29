@@ -17,140 +17,145 @@ team_balancer = TeamBalancer()
 @router.get("/mmr-accuracy")
 async def get_mmr_accuracy(guild_id: str):
     """
-    Analyze MMR stability and accuracy.
+    Analyze MMR accuracy by checking how often the team with higher MMR wins.
+    Also analyzes individual player win rates over time.
     
-    Returns:
-    - MMR change magnitude over time (stabilization)
-    - Expected vs actual win rate by MMR difference (calibration)
-    - Recent vs overall accuracy comparison
+    Returns data points showing win rate over time for the higher MMR team,
+    and per-player win rate analysis grouped by 5-game intervals.
     """
-    from api.services.mmr_calculator import MMRCalculator
-    
     matches = await db_service.get_all_matches_for_guild(guild_id)
     
     if not matches:
         return {
             "matches_analyzed": 0,
-            "stabilization_data": [],
-            "calibration_data": [],
-            "recent_accuracy": 0.0,
-            "overall_accuracy": 0.0
+            "overall_win_rate": 0.0,
+            "data_points": [],
+            "player_win_rate_data": []
         }
     
-    mmr_calculator = MMRCalculator()
+    # Analyze each match for higher MMR team accuracy
+    data_points = []
+    higher_mmr_wins = 0
+    total_matches = 0
     
-    # Split matches into recent (last 25%) and older
-    total_matches = len(matches)
-    recent_cutoff = max(1, total_matches // 4)  # Last 25% of matches
-    recent_matches = matches[-recent_cutoff:] if recent_cutoff > 0 else []
-    older_matches = matches[:-recent_cutoff] if recent_cutoff > 0 else matches
-    
-    # 1. MMR Change Magnitude Over Time (Stabilization)
-    stabilization_data = []
-    for i, match in enumerate(matches, 1):
-        mmr_change = abs(match.get("mmr_change", 0))
-        stabilization_data.append({
-            "match_number": i,
-            "mmr_change_magnitude": mmr_change,
-            "created_at": match.get("created_at")
-        })
-    
-    # Calculate average MMR change for first half vs second half
-    if len(matches) >= 2:
-        first_half = matches[:len(matches)//2]
-        second_half = matches[len(matches)//2:]
-        avg_change_first = sum(abs(m.get("mmr_change", 0)) for m in first_half) / len(first_half)
-        avg_change_second = sum(abs(m.get("mmr_change", 0)) for m in second_half) / len(second_half)
-    else:
-        avg_change_first = 0
-        avg_change_second = 0
-    
-    # 2. Calibration: Expected vs Actual Win Rate by MMR Difference
-    # Group matches by MMR difference buckets
-    calibration_buckets = {
-        "0-25": {"expected_wins": 0, "actual_wins": 0, "total": 0, "expected_win_rate": 0.0},
-        "26-50": {"expected_wins": 0, "actual_wins": 0, "total": 0, "expected_win_rate": 0.0},
-        "51-75": {"expected_wins": 0, "actual_wins": 0, "total": 0, "expected_win_rate": 0.0},
-        "76-100": {"expected_wins": 0, "actual_wins": 0, "total": 0, "expected_win_rate": 0.0},
-        "101+": {"expected_wins": 0, "actual_wins": 0, "total": 0, "expected_win_rate": 0.0}
-    }
+    # Track individual player match history
+    player_matches = {}  # discord_id -> list of (match_number, won)
     
     for match in matches:
         team1_avg = match.get("team1_avg_mmr", 0)
         team2_avg = match.get("team2_avg_mmr", 0)
         winning_team = match.get("winning_team", 0)
+        created_at = match.get("created_at")
+        team1_ids = match.get("team1_player_ids", [])
+        team2_ids = match.get("team2_player_ids", [])
         
-        mmr_diff = abs(team1_avg - team2_avg)
-        
-        # Calculate expected win probability for team 1
-        expected_win_prob = mmr_calculator.calculate_expected_score(team1_avg, team2_avg)
-        
-        # Determine bucket
-        if mmr_diff <= 25:
-            bucket = "0-25"
-        elif mmr_diff <= 50:
-            bucket = "26-50"
-        elif mmr_diff <= 75:
-            bucket = "51-75"
-        elif mmr_diff <= 100:
-            bucket = "76-100"
+        # Determine which team had higher MMR
+        if team1_avg > team2_avg:
+            higher_mmr_team = 1
+        elif team2_avg > team1_avg:
+            higher_mmr_team = 2
         else:
-            bucket = "101+"
+            # Equal MMR, skip this match for accuracy calculation
+            continue
         
-        calibration_buckets[bucket]["total"] += 1
-        calibration_buckets[bucket]["expected_wins"] += expected_win_prob
-        calibration_buckets[bucket]["expected_win_rate"] = expected_win_prob * 100
+        # Check if higher MMR team won
+        higher_mmr_won = (winning_team == higher_mmr_team)
+        if higher_mmr_won:
+            higher_mmr_wins += 1
+        total_matches += 1
         
-        # Check if team 1 won
-        if winning_team == 1:
-            calibration_buckets[bucket]["actual_wins"] += 1
+        # Calculate cumulative win rate up to this point
+        cumulative_win_rate = (higher_mmr_wins / total_matches) * 100 if total_matches > 0 else 0
+        
+        data_points.append({
+            "match_number": total_matches,
+            "created_at": created_at,
+            "higher_mmr_team": higher_mmr_team,
+            "higher_mmr_won": higher_mmr_won,
+            "team1_avg_mmr": team1_avg,
+            "team2_avg_mmr": team2_avg,
+            "cumulative_win_rate": cumulative_win_rate
+        })
+        
+        # Track individual player results
+        for player_id in team1_ids:
+            if player_id not in player_matches:
+                player_matches[player_id] = []
+            player_matches[player_id].append((total_matches, winning_team == 1))
+        
+        for player_id in team2_ids:
+            if player_id not in player_matches:
+                player_matches[player_id] = []
+            player_matches[player_id].append((total_matches, winning_team == 2))
     
-    # Convert to list format
-    calibration_data = []
-    for bucket_name, bucket_data in calibration_buckets.items():
-        if bucket_data["total"] > 0:
-            expected_win_rate = (bucket_data["expected_wins"] / bucket_data["total"]) * 100
-            actual_win_rate = (bucket_data["actual_wins"] / bucket_data["total"]) * 100
-            calibration_data.append({
-                "mmr_difference_range": bucket_name,
-                "matches": bucket_data["total"],
-                "expected_win_rate": expected_win_rate,
-                "actual_win_rate": actual_win_rate,
-                "difference": actual_win_rate - expected_win_rate
+    overall_win_rate = (higher_mmr_wins / total_matches * 100) if total_matches > 0 else 0.0
+    
+    # Analyze player win rates grouped by 5-game intervals
+    player_win_rate_data = []
+    games_per_bucket = 5
+    
+    # For each player, calculate win rate for each 5-game bucket
+    for player_id, matches_list in player_matches.items():
+        if len(matches_list) < games_per_bucket:
+            continue  # Skip players with too few matches
+        
+        # Sort by match number
+        matches_list.sort(key=lambda x: x[0])
+        
+        # Group into buckets of 5 games
+        buckets = []
+        for i in range(0, len(matches_list), games_per_bucket):
+            bucket_matches = matches_list[i:i+games_per_bucket]
+            wins = sum(1 for _, won in bucket_matches if won)
+            total = len(bucket_matches)
+            win_rate = (wins / total * 100) if total > 0 else 0
+            bucket_number = (i // games_per_bucket) + 1
+            
+            buckets.append({
+                "bucket_number": bucket_number,
+                "win_rate": win_rate,
+                "wins": wins,
+                "total": total
+            })
+        
+        if buckets:
+            player_win_rate_data.append({
+                "player_id": player_id,
+                "buckets": buckets,
+                "total_matches": len(matches_list)
             })
     
-    # 3. Recent vs Overall Accuracy
-    def calculate_accuracy(match_list):
-        """Calculate how well MMR predicts winners."""
-        correct = 0
-        total = 0
-        for match in match_list:
-            team1_avg = match.get("team1_avg_mmr", 0)
-            team2_avg = match.get("team2_avg_mmr", 0)
-            winning_team = match.get("winning_team", 0)
-            
-            if team1_avg == team2_avg:
-                continue
-            
-            higher_mmr_team = 1 if team1_avg > team2_avg else 2
-            if winning_team == higher_mmr_team:
-                correct += 1
-            total += 1
-        
-        return (correct / total * 100) if total > 0 else 0.0
+    # Aggregate player win rates by bucket number
+    # For each bucket number, calculate average win rate across all players
+    bucket_aggregates = {}  # bucket_number -> list of win_rates
+    for player_data in player_win_rate_data:
+        for bucket in player_data["buckets"]:
+            bucket_num = bucket["bucket_number"]
+            if bucket_num not in bucket_aggregates:
+                bucket_aggregates[bucket_num] = []
+            bucket_aggregates[bucket_num].append(bucket["win_rate"])
     
-    overall_accuracy = calculate_accuracy(matches)
-    recent_accuracy = calculate_accuracy(recent_matches) if recent_matches else 0.0
+    # Calculate average, min, max for each bucket
+    aggregated_buckets = []
+    for bucket_num in sorted(bucket_aggregates.keys()):
+        win_rates = bucket_aggregates[bucket_num]
+        avg_win_rate = sum(win_rates) / len(win_rates) if win_rates else 0
+        min_win_rate = min(win_rates) if win_rates else 0
+        max_win_rate = max(win_rates) if win_rates else 0
+        
+        aggregated_buckets.append({
+            "bucket_number": bucket_num,
+            "average_win_rate": avg_win_rate,
+            "min_win_rate": min_win_rate,
+            "max_win_rate": max_win_rate,
+            "player_count": len(win_rates)
+        })
     
     return {
         "matches_analyzed": total_matches,
-        "stabilization_data": stabilization_data,
-        "avg_mmr_change_first_half": avg_change_first,
-        "avg_mmr_change_second_half": avg_change_second,
-        "calibration_data": calibration_data,
-        "recent_accuracy": recent_accuracy,
-        "overall_accuracy": overall_accuracy,
-        "recent_matches_count": len(recent_matches)
+        "overall_win_rate": overall_win_rate,
+        "data_points": data_points,
+        "player_win_rate_data": aggregated_buckets
     }
 
 

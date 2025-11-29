@@ -234,7 +234,7 @@ class DatabaseService:
     async def get_all_matches_for_guild(self, guild_id: str) -> list[Dict[str, Any]]:
         """Get all matches for a specific guild, ordered by creation time."""
         result = self.client.table("matches").select(
-            "match_id, created_at, winning_team, team1_avg_mmr, team2_avg_mmr"
+            "match_id, created_at, winning_team, team1_avg_mmr, team2_avg_mmr, team1_player_ids, team2_player_ids"
         ).eq("guild_id", guild_id).order("created_at", desc=False).execute()
         
         return result.data if result.data else []
