@@ -213,33 +213,25 @@ async def correct_match_result(request: CorrectMatchResultRequest):
             detail="Cannot correct match: missing MMR data for some players"
         )
     
-    # Step 1: Revert MMRs to what they were before the match
-    # Get current MMRs to calculate what needs to be reverted
-    accounts = await db_service.get_players_by_discord_ids(all_discord_ids, request.guild_id)
-    current_mmr_map = {acc["discord_id"]: acc.get("custom_mmr", 1000) for acc in accounts}
+    # Calculate the net MMR change needed
+    # Original: Team X won, so Team X got +change, Team Y got -change
+    # Correct: Team Y won, so Team X should get -change, Team Y should get +change
+    # Net: Team X loses 2*change, Team Y gains 2*change
     
-    # Calculate the original MMR change that was applied
+    mmr_calculator = MMRCalculator()
+    
+    # Calculate what the original change was
     original_team1_avg = original_match["team1_avg_mmr"]
     original_team2_avg = original_match["team2_avg_mmr"]
     original_winning_team = original_match["winning_team"]
     
-    mmr_calculator = MMRCalculator()
     original_team1_score = 1.0 if original_winning_team == 1 else 0.0
     original_team1_change = mmr_calculator.calculate_mmr_change(
         original_team1_avg, original_team2_avg, original_team1_score
     )
     original_team2_change = -original_team1_change
     
-    # Revert MMRs: subtract the original change
-    for discord_id in team1_ids:
-        original_mmr = player_mmrs_before_match[discord_id]
-        await db_service.update_player_mmr(discord_id, original_mmr, request.guild_id)
-    
-    for discord_id in team2_ids:
-        original_mmr = player_mmrs_before_match[discord_id]
-        await db_service.update_player_mmr(discord_id, original_mmr, request.guild_id)
-    
-    # Step 2: Calculate and apply the correct MMR changes
+    # Calculate what the correct change should be
     team1_mmrs = [player_mmrs_before_match[discord_id] for discord_id in team1_ids]
     team2_mmrs = [player_mmrs_before_match[discord_id] for discord_id in team2_ids]
     
@@ -247,35 +239,47 @@ async def correct_match_result(request: CorrectMatchResultRequest):
     team2_avg = sum(team2_mmrs) / len(team2_mmrs)
     
     team1_actual_score = 1.0 if request.winning_team == 1 else 0.0
-    team1_change = mmr_calculator.calculate_mmr_change(
+    correct_team1_change = mmr_calculator.calculate_mmr_change(
         team1_avg, team2_avg, team1_actual_score
     )
-    team2_change = -team1_change
+    correct_team2_change = -correct_team1_change
     
-    # Apply the correct MMR changes
+    # Calculate net change: correct_change - original_change
+    # For Team 1: if originally got +16 and should get -16, net is -32
+    # For Team 2: if originally got -16 and should get +16, net is +32
+    net_team1_change = correct_team1_change - original_team1_change
+    net_team2_change = correct_team2_change - original_team2_change
+    
+    # Get current MMRs and apply the net change directly
+    accounts = await db_service.get_players_by_discord_ids(all_discord_ids, request.guild_id)
+    current_mmr_map = {acc["discord_id"]: acc.get("custom_mmr", 1000) for acc in accounts}
+    
+    # Apply net changes to current MMRs
     mmr_changes = {}
     for discord_id in team1_ids:
-        new_mmr = player_mmrs_before_match[discord_id] + team1_change
+        current_mmr = current_mmr_map[discord_id]
+        new_mmr = current_mmr + net_team1_change
         await db_service.update_player_mmr(discord_id, new_mmr, request.guild_id)
-        mmr_changes[discord_id] = team1_change
+        mmr_changes[discord_id] = net_team1_change
     
     for discord_id in team2_ids:
-        new_mmr = player_mmrs_before_match[discord_id] + team2_change
+        current_mmr = current_mmr_map[discord_id]
+        new_mmr = current_mmr + net_team2_change
         await db_service.update_player_mmr(discord_id, new_mmr, request.guild_id)
-        mmr_changes[discord_id] = team2_change
+        mmr_changes[discord_id] = net_team2_change
     
-    # Step 3: Update the match record
+    # Step 2: Update the match record
     await db_service.update_match_result(
         match_id=request.match_id,
         winning_team=request.winning_team,
         team1_avg_mmr=int(team1_avg),
         team2_avg_mmr=int(team2_avg),
-        mmr_change=abs(team1_change),
+        mmr_change=abs(correct_team1_change),
         guild_id=request.guild_id
     )
     
     winning_team_name = f"Team {request.winning_team}"
-    message = f"Match result corrected! {winning_team_name} won. MMR updated: {'+' if team1_change > 0 else ''}{team1_change} for Team 1, {'+' if team2_change > 0 else ''}{team2_change} for Team 2"
+    message = f"Match result corrected! {winning_team_name} won. Net MMR change applied: {'+' if net_team1_change > 0 else ''}{net_team1_change} for Team 1, {'+' if net_team2_change > 0 else ''}{net_team2_change} for Team 2"
     
     return MatchResultResponse(
         match_id=request.match_id,

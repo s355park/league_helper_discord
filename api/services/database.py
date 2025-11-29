@@ -203,6 +203,34 @@ class DatabaseService:
             "mmr_change": mmr_change
         }).eq("match_id", match_id).eq("guild_id", guild_id).execute()
     
+    async def get_subsequent_matches(
+        self,
+        after_timestamp: str,
+        player_ids: list[str],
+        guild_id: str
+    ) -> list[Dict[str, Any]]:
+        """Get all matches after a specific timestamp that involve any of the given players."""
+        # Get all matches after the timestamp for this guild
+        result = self.client.table("matches").select(
+            "*"
+        ).eq("guild_id", guild_id).gt("created_at", after_timestamp).order("created_at", desc=False).execute()
+        
+        if not result.data:
+            return []
+        
+        # Filter to only matches involving any of the players
+        subsequent_matches = []
+        for match in result.data:
+            team1_ids = match.get("team1_player_ids", [])
+            team2_ids = match.get("team2_player_ids", [])
+            all_match_ids = team1_ids + team2_ids
+            
+            # Check if any player from the corrected match is in this match
+            if any(player_id in all_match_ids for player_id in player_ids):
+                subsequent_matches.append(match)
+        
+        return subsequent_matches
+    
     async def get_player_match_history(self, discord_id: str, guild_id: str, limit: int = 50) -> list[Dict[str, Any]]:
         """Get match history for a player with their MMR at match time in a specific guild."""
         # Get matches where player participated in this guild
