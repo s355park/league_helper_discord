@@ -14,6 +14,70 @@ db_service = DatabaseService()
 team_balancer = TeamBalancer()
 
 
+@router.get("/mmr-accuracy")
+async def get_mmr_accuracy(guild_id: str):
+    """
+    Analyze MMR accuracy by checking how often the team with higher MMR wins.
+    
+    Returns data points showing win rate over time for the higher MMR team.
+    """
+    matches = await db_service.get_all_matches_for_guild(guild_id)
+    
+    if not matches:
+        return {
+            "matches_analyzed": 0,
+            "overall_win_rate": 0.0,
+            "data_points": []
+        }
+    
+    # Analyze each match
+    data_points = []
+    higher_mmr_wins = 0
+    total_matches = 0
+    
+    for match in matches:
+        team1_avg = match.get("team1_avg_mmr", 0)
+        team2_avg = match.get("team2_avg_mmr", 0)
+        winning_team = match.get("winning_team", 0)
+        created_at = match.get("created_at")
+        
+        # Determine which team had higher MMR
+        if team1_avg > team2_avg:
+            higher_mmr_team = 1
+        elif team2_avg > team1_avg:
+            higher_mmr_team = 2
+        else:
+            # Equal MMR, skip this match for accuracy calculation
+            continue
+        
+        # Check if higher MMR team won
+        higher_mmr_won = (winning_team == higher_mmr_team)
+        if higher_mmr_won:
+            higher_mmr_wins += 1
+        total_matches += 1
+        
+        # Calculate cumulative win rate up to this point
+        cumulative_win_rate = (higher_mmr_wins / total_matches) * 100 if total_matches > 0 else 0
+        
+        data_points.append({
+            "match_number": total_matches,
+            "created_at": created_at,
+            "higher_mmr_team": higher_mmr_team,
+            "higher_mmr_won": higher_mmr_won,
+            "team1_avg_mmr": team1_avg,
+            "team2_avg_mmr": team2_avg,
+            "cumulative_win_rate": cumulative_win_rate
+        })
+    
+    overall_win_rate = (higher_mmr_wins / total_matches * 100) if total_matches > 0 else 0.0
+    
+    return {
+        "matches_analyzed": total_matches,
+        "overall_win_rate": overall_win_rate,
+        "data_points": data_points
+    }
+
+
 @router.post("/generate", response_model=GenerateTeamsResponse)
 async def generate_teams(request: GenerateTeamsRequest):
     """

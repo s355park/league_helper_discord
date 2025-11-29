@@ -231,6 +231,14 @@ class DatabaseService:
         
         return subsequent_matches
     
+    async def get_all_matches_for_guild(self, guild_id: str) -> list[Dict[str, Any]]:
+        """Get all matches for a specific guild, ordered by creation time."""
+        result = self.client.table("matches").select(
+            "match_id, created_at, winning_team, team1_avg_mmr, team2_avg_mmr"
+        ).eq("guild_id", guild_id).order("created_at", desc=False).execute()
+        
+        return result.data if result.data else []
+    
     async def get_player_match_history(self, discord_id: str, guild_id: str, limit: int = 50) -> list[Dict[str, Any]]:
         """Get match history for a player with their MMR at match time in a specific guild."""
         # Get matches where player participated in this guild
