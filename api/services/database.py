@@ -282,6 +282,34 @@ class DatabaseService:
         
         return matches
     
+    async def get_player_winrate(self, discord_id: str, guild_id: str) -> Dict[str, Any]:
+        """Get winrate statistics for a player in a specific guild."""
+        # Get all matches where player participated in this guild
+        result = self.client.table("matches").select(
+            "winning_team, team1_player_ids, team2_player_ids"
+        ).eq("guild_id", guild_id).execute()
+        
+        wins = 0
+        total = 0
+        
+        for match in (result.data if result.data else []):
+            team1_ids = match.get("team1_player_ids", [])
+            team2_ids = match.get("team2_player_ids", [])
+            if discord_id in team1_ids or discord_id in team2_ids:
+                total += 1
+                team = 1 if discord_id in team1_ids else 2
+                if match["winning_team"] == team:
+                    wins += 1
+        
+        winrate = (wins / total * 100) if total > 0 else 0.0
+        
+        return {
+            "wins": wins,
+            "losses": total - wins,
+            "total": total,
+            "winrate": winrate
+        }
+    
     async def get_mmr_leaderboard(self, guild_id: str, limit: int = 20) -> list[Dict[str, Any]]:
         """Get MMR leaderboard sorted by custom_mmr for a specific guild."""
         # Get guild_users with league accounts, ordered by MMR
@@ -303,14 +331,22 @@ class DatabaseService:
             # Get first league account (users should only have one)
             league_account = league_accounts[0] if isinstance(league_accounts, list) else league_accounts
             
+            # Get winrate for this player
+            discord_id = guild_user["discord_id"]
+            winrate_stats = await self.get_player_winrate(discord_id, guild_id)
+            
             leaderboard.append({
-                "discord_id": guild_user["discord_id"],
+                "discord_id": discord_id,
                 "username": user_data.get("username", "Unknown"),
                 "custom_mmr": guild_user.get("custom_mmr", 1000),
                 "game_name": league_account.get("game_name") if isinstance(league_account, dict) else None,
                 "tag_line": league_account.get("tag_line") if isinstance(league_account, dict) else None,
                 "highest_tier": league_account.get("highest_tier") if isinstance(league_account, dict) else None,
-                "highest_rank": league_account.get("highest_rank") if isinstance(league_account, dict) else None
+                "highest_rank": league_account.get("highest_rank") if isinstance(league_account, dict) else None,
+                "winrate": winrate_stats["winrate"],
+                "wins": winrate_stats["wins"],
+                "losses": winrate_stats["losses"],
+                "total_matches": winrate_stats["total"]
             })
         
         return leaderboard
