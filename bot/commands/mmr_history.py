@@ -48,6 +48,11 @@ class MMRHistoryCommand(commands.Cog):
                 await interaction.followup.send(embed=embed, ephemeral=True)
                 return
             
+            # Calculate winrate
+            wins = sum(1 for match in matches if match.get("won", False))
+            total_matches = len(matches)
+            winrate = (wins / total_matches * 100) if total_matches > 0 else 0
+            
             # Get current MMR
             print(f"[Bot] Getting user account for MMR history...", flush=True)
             account = await self.api_client.get_user_account(discord_id, str(interaction.guild_id))
@@ -133,10 +138,11 @@ class MMRHistoryCommand(commands.Cog):
             ax.spines['right'].set_color('white')
             ax.spines['left'].set_color('white')
             
-            # Add current MMR text
+            # Add current MMR and winrate text
             if mmr_values:
                 final_mmr = mmr_values[-1]
-                ax.text(0.02, 0.98, f'Current MMR: {final_mmr}', 
+                stats_text = f'Current MMR: {final_mmr}\nWinrate: {winrate:.1f}% ({wins}W-{total_matches-wins}L)'
+                ax.text(0.02, 0.98, stats_text, 
                        transform=ax.transAxes, fontsize=10, 
                        verticalalignment='top', color='white',
                        bbox=dict(boxstyle='round', facecolor='#2F3136', alpha=0.8))
@@ -171,8 +177,13 @@ class MMRHistoryCommand(commands.Cog):
                 description=f"Your MMR progression over {len(matches)} match(es)",
                 color=discord.Color.blue()
             )
+            embed.add_field(
+                name="📈 Statistics",
+                value=f"**Winrate:** {winrate:.1f}% ({wins}W-{total_matches-wins}L)\n**Current MMR:** {current_mmr}",
+                inline=False
+            )
             embed.set_image(url="attachment://mmr_history.png")
-            embed.set_footer(text=f"Current MMR: {current_mmr}")
+            embed.set_footer(text=f"Current MMR: {current_mmr} | Winrate: {winrate:.1f}%")
             
             # Send graph
             file = discord.File(buf, filename="mmr_history.png")
