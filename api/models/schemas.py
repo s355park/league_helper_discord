@@ -10,6 +10,8 @@ class LeagueAccountConnect(BaseModel):
     game_name: str
     tag_line: str
     guild_id: str  # Discord server (guild) ID
+    highest_tier: Optional[str] = None  # Optional tier (e.g., "DIAMOND", "GOLD", "MASTER")
+    highest_rank: Optional[str] = None  # Optional rank (e.g., "I", "II", "III", "IV") - not used for Master+
 
 
 class LeagueAccountResponse(BaseModel):
@@ -17,7 +19,7 @@ class LeagueAccountResponse(BaseModel):
     discord_id: str
     game_name: str
     tag_line: str
-    puuid: str
+    puuid: Optional[str]  # Optional since we're not using Riot API
     highest_tier: Optional[str]
     highest_rank: Optional[str]
     custom_mmr: int
@@ -70,3 +72,9 @@ class MatchResultResponse(BaseModel):
     mmr_changes: dict  # Map of discord_id -> mmr_change
     message: str
 
+
+class CorrectMatchResultRequest(BaseModel):
+    """Request schema for correcting match results."""
+    match_id: str
+    winning_team: int  # 1 or 2
+    guild_id: str  # Discord server (guild) ID

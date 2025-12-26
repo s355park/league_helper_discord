@@ -1,6 +1,6 @@
 """FastAPI client wrapper for Discord bot."""
 import httpx
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from config import Config
 
 
@@ -16,7 +16,9 @@ class APIClient:
         discord_username: str,
         game_name: str,
         tag_line: str,
-        guild_id: str
+        guild_id: str,
+        highest_tier: Optional[str] = None,
+        highest_rank: Optional[str] = None
     ) -> Dict[str, Any]:
         """Connect a Discord user to their League account."""
         url = f"{self.base_url}/users/connect"
@@ -27,6 +29,10 @@ class APIClient:
             "tag_line": tag_line,
             "guild_id": guild_id
         }
+        if highest_tier:
+            data["highest_tier"] = highest_tier
+        if highest_rank:
+            data["highest_rank"] = highest_rank
         
         print(f"[Bot] Making request to {url}", flush=True)
         print(f"[Bot] Data: {data}", flush=True)
@@ -138,5 +144,31 @@ class APIClient:
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 404:
                 raise Exception("Account not found")
+            raise Exception(f"API error: {e.response.status_code} - {e.response.text}")
+    
+    async def correct_match_result(
+        self,
+        match_id: str,
+        winning_team: int,
+        guild_id: str
+    ) -> Dict[str, Any]:
+        """Correct a match result that was recorded incorrectly."""
+        url = f"{self.base_url}/teams/correct-match-result"
+        data = {
+            "match_id": match_id,
+            "winning_team": winning_team,
+            "guild_id": guild_id
+        }
+        
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(url, json=data, timeout=30.0)
+                response.raise_for_status()
+                return response.json()
+        except httpx.ConnectError as e:
+            raise ConnectionError(f"Failed to connect to API at {url}. Error: {str(e)}\n\nIs the FastAPI server running? Try: python -m uvicorn api.main:app --reload")
+        except httpx.TimeoutException:
+            raise ConnectionError(f"Request to API timed out. The server may be overloaded.")
+        except httpx.HTTPStatusError as e:
             raise Exception(f"API error: {e.response.status_code} - {e.response.text}")
 

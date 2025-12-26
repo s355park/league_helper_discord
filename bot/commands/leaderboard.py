@@ -78,8 +78,20 @@ class LeaderboardCommand(commands.Cog):
                 else:
                     display_name = user_mention
                 
+                # Get winrate info
+                winrate = player.get("winrate", 0.0)
+                wins = player.get("wins", 0)
+                losses = player.get("losses", 0)
+                total_matches = player.get("total_matches", 0)
+                
+                # Format winrate display
+                if total_matches > 0:
+                    winrate_display = f"Winrate: **{winrate:.1f}%** ({wins}W-{losses}L)"
+                else:
+                    winrate_display = "Winrate: **N/A** (0 matches)"
+                
                 leaderboard_text += f"{rank_emoji} {display_name}\n"
-                leaderboard_text += f"   MMR: **{mmr}** | Tier: {tier_display}\n\n"
+                leaderboard_text += f"   MMR: **{mmr}** | Tier: {tier_display} | {winrate_display}\n\n"
             
             # Create embed
             embed = discord.Embed(
@@ -97,9 +109,21 @@ class LeaderboardCommand(commands.Cog):
                     break
             
             if user_rank:
+                user_player = leaderboard[user_rank-1]
+                user_mmr = user_player['custom_mmr']
+                user_winrate = user_player.get("winrate", 0.0)
+                user_wins = user_player.get("wins", 0)
+                user_losses = user_player.get("losses", 0)
+                user_total = user_player.get("total_matches", 0)
+                
+                if user_total > 0:
+                    winrate_info = f" | Winrate: **{user_winrate:.1f}%** ({user_wins}W-{user_losses}L)"
+                else:
+                    winrate_info = " | Winrate: **N/A**"
+                
                 embed.add_field(
                     name="Your Rank",
-                    value=f"You are ranked **#{user_rank}** with **{leaderboard[user_rank-1]['custom_mmr']}** MMR",
+                    value=f"You are ranked **#{user_rank}** with **{user_mmr}** MMR{winrate_info}",
                     inline=False
                 )
             else:

@@ -56,17 +56,18 @@ class DatabaseService:
         discord_id: str,
         game_name: str,
         tag_line: str,
-        puuid: str,
+        puuid: Optional[str] = None,
         highest_tier: Optional[str] = None,
         highest_rank: Optional[str] = None
     ) -> Dict[str, Any]:
         """Create or update a League account connection."""
-        # Check if this PUUID is already connected to a different Discord account
-        existing_puuid = self.client.table("league_accounts").select("discord_id").eq("puuid", puuid).execute()
-        if existing_puuid.data:
-            existing_discord_id = existing_puuid.data[0]["discord_id"]
-            if existing_discord_id != discord_id:
-                raise ValueError(f"This League account is already connected to a different Discord user")
+        # Check if this PUUID is already connected to a different Discord account (only if PUUID is provided)
+        if puuid:
+            existing_puuid = self.client.table("league_accounts").select("discord_id").eq("puuid", puuid).execute()
+            if existing_puuid.data:
+                existing_discord_id = existing_puuid.data[0]["discord_id"]
+                if existing_discord_id != discord_id:
+                    raise ValueError(f"This League account is already connected to a different Discord user")
         
         # Check if this Discord account already has a League account
         existing_account = self.client.table("league_accounts").select("*").eq("discord_id", discord_id).execute()
@@ -174,6 +175,70 @@ class DatabaseService:
         
         self.client.table("matches").insert(data).execute()
     
+    async def get_match_by_id(self, match_id: str, guild_id: str) -> Optional[Dict[str, Any]]:
+        """Get a match by match_id for a specific guild."""
+        result = self.client.table("matches").select(
+            "*"
+        ).eq("match_id", match_id).eq("guild_id", guild_id).execute()
+        
+        if not result.data:
+            return None
+        
+        return result.data[0]
+    
+    async def update_match_result(
+        self,
+        match_id: str,
+        winning_team: int,
+        team1_avg_mmr: int,
+        team2_avg_mmr: int,
+        mmr_change: int,
+        guild_id: str
+    ) -> None:
+        """Update a match result in the database."""
+        self.client.table("matches").update({
+            "winning_team": winning_team,
+            "team1_avg_mmr": team1_avg_mmr,
+            "team2_avg_mmr": team2_avg_mmr,
+            "mmr_change": mmr_change
+        }).eq("match_id", match_id).eq("guild_id", guild_id).execute()
+    
+    async def get_subsequent_matches(
+        self,
+        after_timestamp: str,
+        player_ids: list[str],
+        guild_id: str
+    ) -> list[Dict[str, Any]]:
+        """Get all matches after a specific timestamp that involve any of the given players."""
+        # Get all matches after the timestamp for this guild
+        result = self.client.table("matches").select(
+            "*"
+        ).eq("guild_id", guild_id).gt("created_at", after_timestamp).order("created_at", desc=False).execute()
+        
+        if not result.data:
+            return []
+        
+        # Filter to only matches involving any of the players
+        subsequent_matches = []
+        for match in result.data:
+            team1_ids = match.get("team1_player_ids", [])
+            team2_ids = match.get("team2_player_ids", [])
+            all_match_ids = team1_ids + team2_ids
+            
+            # Check if any player from the corrected match is in this match
+            if any(player_id in all_match_ids for player_id in player_ids):
+                subsequent_matches.append(match)
+        
+        return subsequent_matches
+    
+    async def get_all_matches_for_guild(self, guild_id: str) -> list[Dict[str, Any]]:
+        """Get all matches for a specific guild, ordered by creation time."""
+        result = self.client.table("matches").select(
+            "match_id, created_at, winning_team, team1_avg_mmr, team2_avg_mmr, team1_player_ids, team2_player_ids"
+        ).eq("guild_id", guild_id).order("created_at", desc=False).execute()
+        
+        return result.data if result.data else []
+    
     async def get_player_match_history(self, discord_id: str, guild_id: str, limit: int = 50) -> list[Dict[str, Any]]:
         """Get match history for a player with their MMR at match time in a specific guild."""
         # Get matches where player participated in this guild
@@ -217,6 +282,34 @@ class DatabaseService:
         
         return matches
     
+    async def get_player_winrate(self, discord_id: str, guild_id: str) -> Dict[str, Any]:
+        """Get winrate statistics for a player in a specific guild."""
+        # Get all matches where player participated in this guild
+        result = self.client.table("matches").select(
+            "winning_team, team1_player_ids, team2_player_ids"
+        ).eq("guild_id", guild_id).execute()
+        
+        wins = 0
+        total = 0
+        
+        for match in (result.data if result.data else []):
+            team1_ids = match.get("team1_player_ids", [])
+            team2_ids = match.get("team2_player_ids", [])
+            if discord_id in team1_ids or discord_id in team2_ids:
+                total += 1
+                team = 1 if discord_id in team1_ids else 2
+                if match["winning_team"] == team:
+                    wins += 1
+        
+        winrate = (wins / total * 100) if total > 0 else 0.0
+        
+        return {
+            "wins": wins,
+            "losses": total - wins,
+            "total": total,
+            "winrate": winrate
+        }
+    
     async def get_mmr_leaderboard(self, guild_id: str, limit: int = 20) -> list[Dict[str, Any]]:
         """Get MMR leaderboard sorted by custom_mmr for a specific guild."""
         # Get guild_users with league accounts, ordered by MMR
@@ -238,14 +331,22 @@ class DatabaseService:
             # Get first league account (users should only have one)
             league_account = league_accounts[0] if isinstance(league_accounts, list) else league_accounts
             
+            # Get winrate for this player
+            discord_id = guild_user["discord_id"]
+            winrate_stats = await self.get_player_winrate(discord_id, guild_id)
+            
             leaderboard.append({
-                "discord_id": guild_user["discord_id"],
+                "discord_id": discord_id,
                 "username": user_data.get("username", "Unknown"),
                 "custom_mmr": guild_user.get("custom_mmr", 1000),
                 "game_name": league_account.get("game_name") if isinstance(league_account, dict) else None,
                 "tag_line": league_account.get("tag_line") if isinstance(league_account, dict) else None,
                 "highest_tier": league_account.get("highest_tier") if isinstance(league_account, dict) else None,
-                "highest_rank": league_account.get("highest_rank") if isinstance(league_account, dict) else None
+                "highest_rank": league_account.get("highest_rank") if isinstance(league_account, dict) else None,
+                "winrate": winrate_stats["winrate"],
+                "wins": winrate_stats["wins"],
+                "losses": winrate_stats["losses"],
+                "total_matches": winrate_stats["total"]
             })
         
         return leaderboard
